@@ -25,8 +25,8 @@ const schema = z.object({
   DEFAULT_TIMEZONE: z.string().default('Europe/Moscow'),
   DEFAULT_LEARNING_LANGUAGE: z.string().default('pl'),
 
-  CURRENCY_NAME: z.string().default('Гемы'),
-  CURRENCY_SYMBOL: z.string().default('💎'),
+  CURRENCY_NAME: z.string().default('Солнышки'),
+  CURRENCY_SYMBOL: z.string().default('☀️'),
 });
 
 const parsed = schema.safeParse(process.env);

@@ -2,7 +2,7 @@
   "name": "lingua-quest-bot",
   "version": "0.1.0",
   "private": true,
-  "description": "Telegram language learning game bot (flashcards, SRS, streaks, XP, economy, quests, achievements, shop)",
+  "description": "Telegram language learning game bot (flashcards, SRS, streaks, economy)",
   "main": "dist/src/index.js",
   "engines": {
     "node": ">=20"

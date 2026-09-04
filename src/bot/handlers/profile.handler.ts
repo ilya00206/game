@@ -22,7 +22,7 @@ async function renderProfile(ctx: BotContext): Promise<void> {
     `🌟 Выучено полностью: ${stats.wordsMastered}`,
     `🎯 Правильных ответов: ${stats.correctAnswers}`,
     '',
-    `💎 Гемы: ${ctx.user.gems} ${CURRENCY}`,
+    `☀️ Солнышки: ${ctx.user.gems} ${CURRENCY}`,
   ];
 
   await render(ctx, lines.filter(Boolean).join('\n'), { keyboard: backToMenuKeyboard() });

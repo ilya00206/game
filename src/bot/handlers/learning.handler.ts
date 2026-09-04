@@ -145,7 +145,7 @@ learningComposer.callbackQuery(cb(CB.learn, 'start'), async (ctx) => {
       `🔁 К повторению: ${preview.due}`,
       `✨ Новых слов: ${Math.min(preview.newAvailable, learningConfig.maxNewWordsPerSession)}`,
       '',
-      'Награды: XP, кристаллы, прогресс заданий и streak.',
+      'Награды: солнышки и streak.',
     ].join('\n'),
     { keyboard: sessionPreviewKeyboard(true) },
   );

@@ -101,7 +101,7 @@ adminComposer.callbackQuery(cb(CB.admin, 'stats'), async (ctx) => {
       `📚 Активных слов: ${overview.words}`,
       `🏁 Тренировок завершено: ${overview.sessions}`,
       `✍️ Ответов: ${overview.answers}`,
-      `💎 Всего гемов: ${overview.gems}`,
+      `☀️ Всего солнышек: ${overview.gems}`,
     ].join('\n'),
     { keyboard: new InlineKeyboard().text('⬅️ Назад', cb(CB.admin, 'menu')) },
   );
@@ -114,7 +114,7 @@ adminComposer.callbackQuery(cb(CB.admin, 'users'), async (ctx) => {
   const lines = ['👤 <b>Игроки</b>', ''];
   for (const user of users) {
     lines.push(
-      `• ${escapeHtml(user.firstName ?? String(user.telegramId))} — 🔥${user.currentStreak}, 💎${user.gems}`,
+      `• ${escapeHtml(user.firstName ?? String(user.telegramId))} — 🔥${user.currentStreak}, ☀️${user.gems}`,
     );
   }
 

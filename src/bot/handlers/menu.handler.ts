@@ -19,7 +19,7 @@ export async function renderMainMenu(ctx: BotContext, greeting?: string): Promis
     `🌸 <b>Главное меню</b>`,
     '',
     `🔥 Streak: ${user.currentStreak} ${activeToday ? '(сегодня отмечен)' : '(сегодня ещё нет)'}`,
-    `💎 Гемы: ${formatCurrency(user.gems)}`,
+    `☀️ Солнышки: ${formatCurrency(user.gems)}`,
     '',
     preview.plannedSize > 0
       ? `📚 На сегодня готово ${preview.plannedSize} ${preview.plannedSize === 1 ? 'карточка' : 'карточек'}`
