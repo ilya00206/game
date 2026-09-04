@@ -1,7 +1,6 @@
 import { SessionStatus, WordStatus, type User } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import { currentWeekDayKeys } from '../utils/time';
-import { getLevelProgress } from './level';
 
 export interface ProgressStats {
   wordsTotal: number;
@@ -16,22 +15,17 @@ export interface ProgressStats {
   learningMinutes: number;
   currentStreak: number;
   longestStreak: number;
-  level: ReturnType<typeof getLevelProgress>;
   weekly: Array<{ dayKey: string; answers: number }>;
-  achievementsUnlocked: number;
-  achievementsTotal: number;
 }
 
 export const statsService = {
   async getProgress(user: User, now = new Date()): Promise<ProgressStats> {
     const weekKeys = currentWeekDayKeys(now, user.timezone);
 
-    const [statusGroups, sessionsCompleted, weekActivity, achievementsUnlocked, achievementsTotal] = await Promise.all([
+    const [statusGroups, sessionsCompleted, weekActivity] = await Promise.all([
       prisma.userWord.groupBy({ by: ['status'], where: { userId: user.id }, _count: { _all: true } }),
       prisma.learningSession.count({ where: { userId: user.id, status: SessionStatus.COMPLETED } }),
       prisma.dailyActivity.findMany({ where: { userId: user.id, localDay: { in: weekKeys } } }),
-      prisma.userAchievement.count({ where: { userId: user.id } }),
-      prisma.achievement.count({ where: { isActive: true } }),
     ]);
 
     const countFor = (status: WordStatus): number =>
@@ -52,22 +46,18 @@ export const statsService = {
       learningMinutes: Math.round(user.totalLearningSeconds / 60),
       currentStreak: user.currentStreak,
       longestStreak: user.longestStreak,
-      level: getLevelProgress(user.xp),
       weekly: weekKeys.map((dayKey) => ({ dayKey, answers: activityMap.get(dayKey) ?? 0 })),
-      achievementsUnlocked,
-      achievementsTotal,
     };
   },
 
   async getAdminOverview() {
-    const [users, activeToday, words, sessions, answers, currencyIssued, purchases] = await Promise.all([
+    const [users, activeToday, words, sessions, answers, gems] = await Promise.all([
       prisma.user.count(),
       prisma.user.count({ where: { lastActiveAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } } }),
       prisma.word.count({ where: { isActive: true } }),
       prisma.learningSession.count({ where: { status: SessionStatus.COMPLETED } }),
       prisma.learningAnswer.count(),
-      prisma.economyTransaction.aggregate({ where: { direction: 'CREDIT' }, _sum: { amount: true } }),
-      prisma.purchase.count(),
+      prisma.user.aggregate({ _sum: { gems: true } }),
     ]);
 
     return {
@@ -76,8 +66,7 @@ export const statsService = {
       words,
       sessions,
       answers,
-      currencyIssued: currencyIssued._sum.amount ?? 0,
-      purchases,
+      gems: gems._sum.gems ?? 0,
     };
   },
 };

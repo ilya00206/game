@@ -57,6 +57,5 @@ export function summaryKeyboard(): InlineKeyboard {
   return new InlineKeyboard()
     .text('🔁 Ещё тренировка', cb(CB.learn, 'start'))
     .row()
-    .text('🎯 Задания', cb(CB.quests, 'list'))
     .text('⬅️ В меню', cb(CB.menu, 'main'));
 }

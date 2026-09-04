@@ -1,8 +1,6 @@
 // Prisma schema for the Telegram language learning game.
 // Design rules enforced here:
-//  - every balance change is backed by an EconomyTransaction row (ledger)
-//  - every rewarding operation carries a unique idempotencyKey
-//  - per-user/per-period uniqueness protects daily bonus, quests and achievements
+//  - user progress consists of learning, a daily streak and gems
 
 generator client {
   provider = "prisma-client-js"
@@ -51,73 +49,6 @@ enum SessionStatus {
   ABANDONED
 }
 
-enum TransactionDirection {
-  CREDIT
-  DEBIT
-}
-
-enum QuestPeriod {
-  DAILY
-  WEEKLY
-  LONG_TERM
-}
-
-enum QuestMetric {
-  WORDS_ANSWERED
-  CORRECT_ANSWERS
-  WORDS_MASTERED
-  SESSIONS_COMPLETED
-  XP_EARNED
-  ACTIVE_DAYS
-  DAILY_BONUS_CLAIMED
-}
-
-enum UserQuestStatus {
-  ACTIVE
-  COMPLETED
-  CLAIMED
-  EXPIRED
-}
-
-enum ShopItemType {
-  STREAK_SHIELD
-  XP_BOOST
-  COSMETIC
-  SPECIAL_REWARD
-  PERSONAL_REWARD
-}
-
-enum RewardContentType {
-  TEXT
-  PHOTO
-  VIDEO
-  ANIMATION
-  DOCUMENT
-  AUDIO
-  VOICE
-  STICKER
-}
-
-enum GameEventType {
-  USER_REGISTERED
-  WORD_ANSWERED
-  WORD_MASTERED
-  SESSION_STARTED
-  SESSION_COMPLETED
-  DAILY_ACTIVITY_COMPLETED
-  STREAK_UPDATED
-  STREAK_MILESTONE_REACHED
-  LEVEL_UP
-  QUEST_PROGRESS
-  QUEST_COMPLETED
-  QUEST_CLAIMED
-  ACHIEVEMENT_UNLOCKED
-  DAILY_BONUS_CLAIMED
-  SHOP_PURCHASE
-  REWARD_GRANTED
-  EASTER_EGG_FOUND
-}
-
 // ---------------------------------------------------------------------------
 // User
 // ---------------------------------------------------------------------------
@@ -138,25 +69,13 @@ model User {
   isAdmin  Boolean @default(false)
   isBanned Boolean @default(false)
 
-  // --- progression ---
-  xp    Int @default(0)
-  level Int @default(1)
-
-  // --- economy (denormalised, always mirrored by the ledger) ---
-  balance       Int @default(0)
-  streakShields Int @default(0)
+  gems Int @default(0)
 
   // --- streak ---
   currentStreak    Int       @default(0)
   longestStreak    Int       @default(0)
   lastActivityDay  String? // local day key YYYY-MM-DD
   lastActivityAt   DateTime?
-  streakFrozenDays Int       @default(0)
-
-  // --- daily bonus ---
-  dailyBonusStreak    Int       @default(0)
-  dailyBonusDay       String? // local day key YYYY-MM-DD
-  dailyBonusClaimedAt DateTime?
 
   // --- lifetime counters (cheap stats, always derivable from the ledger) ---
   totalAnswers         Int @default(0)
@@ -172,15 +91,6 @@ model User {
   words                UserWord[]
   sessions             LearningSession[]
   answers              LearningAnswer[]
-  transactions         EconomyTransaction[]
-  purchases            Purchase[]
-  inventory            InventoryItem[]
-  quests               UserQuest[]
-  achievements         UserAchievement[]
-  rewardPurchases      RewardPurchase[]
-  dailyBonusClaims     DailyBonusClaim[]
-  events               GameEventLog[]
-  easterEggs           UserEasterEgg[]
   dailyActivity        DailyActivity[]
 
   @@index([lastActiveAt])
@@ -194,7 +104,6 @@ model NotificationSettings {
   notificationsEnabled  Boolean @default(true)
   dailyReminderEnabled  Boolean @default(true)
   streakReminderEnabled Boolean @default(true)
-  questReminderEnabled  Boolean @default(true)
   // local time HH:mm in the user's timezone
   reminderTime          String  @default("19:00")
 
@@ -223,8 +132,6 @@ model Word {
   category           String?
   tags               String[]   @default([])
   isActive           Boolean    @default(true)
-  // personal note the admin can attach to a word (used by the easter-egg layer)
-  note               String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -286,8 +193,7 @@ model LearningSession {
   correctAnswers Int @default(0)
   wrongAnswers   Int @default(0)
 
-  xpEarned       Int @default(0)
-  currencyEarned Int @default(0)
+  gemsEarned Int @default(0)
 
   startedAt   DateTime  @default(now())
   completedAt DateTime?
@@ -330,7 +236,6 @@ model DailyActivity {
   answers   Int @default(0)
   correct   Int @default(0)
   sessions  Int @default(0)
-  xpEarned  Int @default(0)
   seconds   Int @default(0)
 
   createdAt DateTime @default(now())
@@ -338,284 +243,4 @@ model DailyActivity {
 
   @@unique([userId, localDay])
   @@index([userId, localDay])
-}
-
-// ---------------------------------------------------------------------------
-// Economy
-// ---------------------------------------------------------------------------
-
-model EconomyTransaction {
-  id     String @id @default(cuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  direction      TransactionDirection
-  amount         Int // always positive, direction carries the sign
-  balanceAfter   Int
-  reason         String // e.g. daily_bonus, lesson_completed, shop_purchase
-  metadata       Json?
-  // set for every operation that must never be applied twice
-  idempotencyKey String?              @unique
-
-  createdAt DateTime @default(now())
-
-  @@index([userId, createdAt])
-  @@index([reason])
-}
-
-model ShopItem {
-  id          String       @id @default(cuid())
-  code        String       @unique
-  title       String
-  description String
-  icon        String       @default("🛍")
-  price       Int
-  type        ShopItemType
-  // type specific payload, e.g. { "amount": 1 } or { "rewardId": "..." }
-  metadata    Json?
-  // null = unlimited, otherwise how many times a single user may buy it
-  perUserLimit Int?
-  stock        Int?
-  sortOrder    Int         @default(0)
-  isActive     Boolean     @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  purchases Purchase[]
-
-  @@index([isActive, sortOrder])
-}
-
-model Purchase {
-  id     String   @id @default(cuid())
-  userId String
-  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  itemId String
-  item   ShopItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-
-  price          Int
-  quantity       Int     @default(1)
-  idempotencyKey String  @unique
-  transactionId  String?
-
-  createdAt DateTime @default(now())
-
-  @@index([userId, createdAt])
-}
-
-model InventoryItem {
-  id     String @id @default(cuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  code     String
-  quantity Int    @default(0)
-  metadata Json?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([userId, code])
-}
-
-// ---------------------------------------------------------------------------
-// Quests
-// ---------------------------------------------------------------------------
-
-model Quest {
-  id          String      @id @default(cuid())
-  code        String      @unique
-  title       String
-  description String
-  icon        String      @default("🎯")
-  period      QuestPeriod
-  metric      QuestMetric
-  target      Int
-  // reward bundle: { "currency": 50, "xp": 20, "streakShields": 0 }
-  reward      Json
-  weight      Int         @default(1)
-  isActive    Boolean     @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  userQuests UserQuest[]
-
-  @@index([isActive, period])
-}
-
-model UserQuest {
-  id      String @id @default(cuid())
-  userId  String
-  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  questId String
-  quest   Quest  @relation(fields: [questId], references: [id], onDelete: Cascade)
-
-  // local day key for daily quests, ISO week key (YYYY-Www) for weekly
-  periodKey String
-  progress  Int             @default(0)
-  target    Int
-  status    UserQuestStatus @default(ACTIVE)
-
-  completedAt DateTime?
-  claimedAt   DateTime?
-  expiresAt   DateTime
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([userId, questId, periodKey])
-  @@index([userId, status])
-}
-
-// ---------------------------------------------------------------------------
-// Achievements
-// ---------------------------------------------------------------------------
-
-model Achievement {
-  id          String @id @default(cuid())
-  code        String @unique
-  title       String
-  description String
-  icon        String @default("🏅")
-  // { "metric": "TOTAL_CORRECT_ANSWERS", "threshold": 100 }
-  condition   Json
-  reward      Json?
-  isSecret    Boolean @default(false)
-  sortOrder   Int     @default(0)
-  isActive    Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  userAchievements UserAchievement[]
-
-  @@index([isActive, sortOrder])
-}
-
-model UserAchievement {
-  id            String      @id @default(cuid())
-  userId        String
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  achievementId String
-  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
-
-  unlockedAt DateTime @default(now())
-
-  @@unique([userId, achievementId])
-}
-
-// ---------------------------------------------------------------------------
-// Rewards (admin authored content)
-// ---------------------------------------------------------------------------
-
-model Reward {
-  id          String            @id @default(cuid())
-  code        String            @unique
-  title       String
-  description String
-  icon        String            @default("🎁")
-  price       Int               @default(0)
-  contentType RewardContentType @default(TEXT)
-  contentText String?
-  // Telegram file_id for media rewards
-  contentFileId String?
-  metadata      Json?
-  isActive      Boolean         @default(true)
-  perUserLimit  Int?            @default(1)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  purchases RewardPurchase[]
-
-  @@index([isActive])
-}
-
-model RewardPurchase {
-  id       String @id @default(cuid())
-  userId   String
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  rewardId String
-  reward   Reward @relation(fields: [rewardId], references: [id], onDelete: Cascade)
-
-  price          Int
-  idempotencyKey String    @unique
-  openedAt       DateTime?
-
-  createdAt DateTime @default(now())
-
-  @@index([userId, createdAt])
-}
-
-// ---------------------------------------------------------------------------
-// Daily bonus
-// ---------------------------------------------------------------------------
-
-model DailyBonusClaim {
-  id     String @id @default(cuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  localDay  String
-  dayInCycle Int
-  reward    Json
-
-  createdAt DateTime @default(now())
-
-  @@unique([userId, localDay])
-}
-
-// ---------------------------------------------------------------------------
-// Easter eggs (personal layer)
-// ---------------------------------------------------------------------------
-
-model EasterEgg {
-  id          String            @id @default(cuid())
-  code        String            @unique
-  title       String
-  // free-form trigger descriptor, e.g. { "kind": "command", "value": "/love" }
-  trigger     Json
-  contentType RewardContentType @default(TEXT)
-  contentText String?
-  contentFileId String?
-  reward      Json?
-  isActive    Boolean           @default(true)
-  isRepeatable Boolean          @default(false)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  finds UserEasterEgg[]
-}
-
-model UserEasterEgg {
-  id     String    @id @default(cuid())
-  userId String
-  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  eggId  String
-  egg    EasterEgg @relation(fields: [eggId], references: [id], onDelete: Cascade)
-
-  foundAt DateTime @default(now())
-  times   Int      @default(1)
-
-  @@unique([userId, eggId])
-}
-
-// ---------------------------------------------------------------------------
-// Event log
-// ---------------------------------------------------------------------------
-
-model GameEventLog {
-  id      String        @id @default(cuid())
-  userId  String?
-  user    User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type    GameEventType
-  payload Json?
-
-  createdAt DateTime @default(now())
-
-  @@index([userId, createdAt])
-  @@index([type, createdAt])
 }

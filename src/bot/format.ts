@@ -1,6 +1,5 @@
 import { env } from '../config/env';
 import { uiConfig } from '../config/game.config';
-import type { RewardBundle } from '../services/reward.service';
 
 export const CURRENCY = env.CURRENCY_SYMBOL;
 
@@ -34,16 +33,6 @@ export function formatDuration(totalSeconds: number): string {
 
 export function formatCurrency(amount: number): string {
   return `${amount} ${CURRENCY}`;
-}
-
-/** Compact one-line summary of everything a reward bundle gave. */
-export function formatRewardBundle(bundle: RewardBundle): string {
-  const parts: string[] = [];
-  if (bundle.xp) parts.push(`+${bundle.xp} XP`);
-  if (bundle.currency) parts.push(`+${bundle.currency} ${CURRENCY}`);
-  if (bundle.streakShields) parts.push(`+${bundle.streakShields} 🛡`);
-  for (const item of bundle.items ?? []) parts.push(`+${item.quantity} × ${item.code}`);
-  return parts.length ? parts.join('   ') : '—';
 }
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];

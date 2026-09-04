@@ -1,10 +1,6 @@
 import 'dotenv/config';
 import { z } from 'zod';
 
-const booleanish = z
-  .union([z.boolean(), z.string()])
-  .transform((value) => (typeof value === 'boolean' ? value : ['1', 'true', 'yes', 'on'].includes(value.toLowerCase())));
-
 // Empty env vars arrive as "" rather than undefined; treat them as unset for optional fields.
 const optionalString = () => z.preprocess((value) => (value === '' ? undefined : value), z.string().optional());
 const optionalUrl = () => z.preprocess((value) => (value === '' ? undefined : value), z.string().url().optional());
@@ -29,10 +25,8 @@ const schema = z.object({
   DEFAULT_TIMEZONE: z.string().default('Europe/Moscow'),
   DEFAULT_LEARNING_LANGUAGE: z.string().default('pl'),
 
-  CURRENCY_NAME: z.string().default('Кристаллы'),
+  CURRENCY_NAME: z.string().default('Гемы'),
   CURRENCY_SYMBOL: z.string().default('💎'),
-
-  EASTER_EGGS_ENABLED: booleanish.default(true),
 });
 
 const parsed = schema.safeParse(process.env);

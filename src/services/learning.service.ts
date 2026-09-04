@@ -1,21 +1,18 @@
 import {
   AnswerGrade,
   ExerciseType,
-  GameEventType,
   SessionStatus,
   WordStatus,
   type LearningSession,
   type User,
   type Word,
 } from '@prisma/client';
-import { gradeConfig, learningConfig, sessionRewardConfig } from '../config/game.config';
+import { gradeConfig, learningConfig } from '../config/game.config';
 import { isUniqueViolation, prisma, runInTransaction } from '../db/prisma';
-import { gameEvents } from '../events/event-bus';
 import { childLogger } from '../utils/logger';
 import { getDayKey } from '../utils/time';
 import { buildExercise, selectExerciseType } from './exercise/exercise.factory';
 import type { Exercise } from './exercise/exercise.types';
-import { mergeBundles, rewardService, type RewardBundle } from './reward.service';
 import { srs } from './srs';
 
 const log = childLogger('learning');
@@ -35,11 +32,8 @@ export interface SessionSummary {
   totalQuestions: number;
   correctAnswers: number;
   wrongAnswers: number;
-  xpEarned: number;
-  currencyEarned: number;
+  gemsEarned: number;
   masteredWords: number;
-  perfect: boolean;
-  firstSessionOfDay: boolean;
   alreadyCompleted: boolean;
 }
 
@@ -145,7 +139,7 @@ export const learningService = {
       },
     });
 
-    await gameEvents.emit(GameEventType.SESSION_STARTED, { userId: user.id, sessionId: session.id });
+
     return { session, resumed: false };
   },
 
@@ -294,8 +288,7 @@ export const learningService = {
           totalQuestions: { increment: 1 },
           correctAnswers: { increment: config.isCorrect ? 1 : 0 },
           wrongAnswers: { increment: config.isCorrect ? 0 : 1 },
-          xpEarned: { increment: config.xp },
-          currencyEarned: { increment: config.currency },
+          gemsEarned: { increment: config.gems },
         },
       });
 
@@ -335,19 +328,6 @@ export const learningService = {
       };
     }
 
-    await gameEvents.emit(GameEventType.WORD_ANSWERED, {
-      userId: user.id,
-      wordId: outcome.wordId,
-      sessionId,
-      grade,
-      isCorrect: outcome.isCorrect,
-      status: outcome.status,
-    });
-
-    if (outcome.becameMastered) {
-      await gameEvents.emit(GameEventType.WORD_MASTERED, { userId: user.id, wordId: outcome.wordId });
-    }
-
     const nextExercise = outcome.finished ? null : await learningService.getCurrentExercise(sessionId);
 
     return {
@@ -361,59 +341,28 @@ export const learningService = {
   },
 
   /**
-   * Finalises a session and pays out. Idempotent: the reward bundle uses the
-   * session id as its key and the status flip is guarded by a conditional update.
+   * Finalises a session and credits its gems once the status flip succeeds.
    */
   async completeSession(user: User, sessionId: string, now = new Date()): Promise<SessionSummary | null> {
     const session = await prisma.learningSession.findFirst({ where: { id: sessionId, userId: user.id } });
     if (!session) return null;
 
     if (session.status === SessionStatus.COMPLETED) {
-      return buildSummary(session, 0, false, true);
+      return buildSummary(session, 0, true);
     }
 
     const localDay = getDayKey(now, user.timezone);
-    const earlierToday = await prisma.learningSession.count({
-      where: { userId: user.id, status: SessionStatus.COMPLETED, localDay },
-    });
-    const firstSessionOfDay = earlierToday === 0;
-
     const flipped = await prisma.learningSession.updateMany({
       where: { id: sessionId, userId: user.id, status: SessionStatus.IN_PROGRESS },
       data: { status: SessionStatus.COMPLETED, completedAt: now },
     });
     if (flipped.count === 0) {
       const fresh = await prisma.learningSession.findUniqueOrThrow({ where: { id: sessionId } });
-      return buildSummary(fresh, 0, false, true);
+      return buildSummary(fresh, 0, true);
     }
 
     const masteredWords = await prisma.learningAnswer.count({
       where: { sessionId, word: { userWords: { some: { userId: user.id, status: WordStatus.MASTERED } } } },
-    });
-
-    const perfect = session.totalQuestions > 0 && session.wrongAnswers === 0;
-
-    const bundle: RewardBundle = mergeBundles(
-      { xp: session.xpEarned, currency: session.currencyEarned },
-      { xp: sessionRewardConfig.completionXp, currency: sessionRewardConfig.completionCurrency },
-      perfect ? { xp: sessionRewardConfig.perfectBonusXp, currency: sessionRewardConfig.perfectBonusCurrency } : {},
-      firstSessionOfDay
-        ? { xp: sessionRewardConfig.firstSessionOfDayXp, currency: sessionRewardConfig.firstSessionOfDayCurrency }
-        : {},
-      masteredWords > 0
-        ? {
-            xp: masteredWords * sessionRewardConfig.wordMasteredXp,
-            currency: masteredWords * sessionRewardConfig.wordMasteredCurrency,
-          }
-        : {},
-    );
-
-    const granted = await rewardService.grant({
-      userId: user.id,
-      bundle,
-      reason: 'lesson_completed',
-      idempotencyKey: `session_complete:${sessionId}`,
-      metadata: { sessionId, perfect, firstSessionOfDay, masteredWords },
     });
 
     const durationSeconds = Math.max(0, Math.round((now.getTime() - session.startedAt.getTime()) / 1000));
@@ -423,6 +372,7 @@ export const learningService = {
       data: {
         totalSessions: { increment: 1 },
         totalLearningSeconds: { increment: durationSeconds },
+        gems: { increment: session.gemsEarned },
       },
     });
 
@@ -434,38 +384,25 @@ export const learningService = {
         answers: session.totalQuestions,
         correct: session.correctAnswers,
         sessions: 1,
-        xpEarned: granted.xp,
         seconds: durationSeconds,
       },
       update: {
         answers: { increment: session.totalQuestions },
         correct: { increment: session.correctAnswers },
         sessions: { increment: 1 },
-        xpEarned: { increment: granted.xp },
         seconds: { increment: durationSeconds },
       },
     });
 
-    log.info({ userId: user.id, sessionId, xp: granted.xp, currency: granted.currency }, 'session completed');
-
-    await gameEvents.emit(GameEventType.SESSION_COMPLETED, {
-      userId: user.id,
-      sessionId,
-      totalQuestions: session.totalQuestions,
-      correctAnswers: session.correctAnswers,
-      xpEarned: granted.xp,
-    });
+    log.info({ userId: user.id, sessionId, gems: session.gemsEarned }, 'session completed');
 
     return {
       sessionId,
       totalQuestions: session.totalQuestions,
       correctAnswers: session.correctAnswers,
       wrongAnswers: session.wrongAnswers,
-      xpEarned: granted.xp,
-      currencyEarned: granted.currency,
+      gemsEarned: session.gemsEarned,
       masteredWords,
-      perfect,
-      firstSessionOfDay,
       alreadyCompleted: false,
     };
   },
@@ -481,7 +418,6 @@ export const learningService = {
 function buildSummary(
   session: LearningSession,
   masteredWords: number,
-  firstSessionOfDay: boolean,
   alreadyCompleted: boolean,
 ): SessionSummary {
   return {
@@ -489,11 +425,8 @@ function buildSummary(
     totalQuestions: session.totalQuestions,
     correctAnswers: session.correctAnswers,
     wrongAnswers: session.wrongAnswers,
-    xpEarned: session.xpEarned,
-    currencyEarned: session.currencyEarned,
+    gemsEarned: session.gemsEarned,
     masteredWords,
-    perfect: session.totalQuestions > 0 && session.wrongAnswers === 0,
-    firstSessionOfDay,
     alreadyCompleted,
   };
 }

@@ -8,14 +8,9 @@
 export const CB = {
   menu: 'menu',
   learn: 'learn',
-  quests: 'quest',
-  bonus: 'bonus',
   progress: 'prog',
-  shop: 'shop',
-  achievements: 'ach',
   profile: 'prof',
   settings: 'set',
-  rewards: 'rw',
   admin: 'adm',
   noop: 'noop',
 } as const;

@@ -2,16 +2,11 @@ import { Bot, GrammyError, HttpError, MemorySessionStorage, session } from 'gram
 import { env } from '../config/env';
 import { childLogger } from '../utils/logger';
 import type { BotContext, SessionData } from './context';
-import { achievementComposer } from './handlers/achievement.handler';
 import { adminComposer } from './handlers/admin.handler';
-import { bonusComposer } from './handlers/bonus.handler';
-import { easterEggComposer } from './handlers/easterEgg.handler';
 import { learningComposer } from './handlers/learning.handler';
 import { menuComposer } from './handlers/menu.handler';
 import { profileComposer } from './handlers/profile.handler';
-import { questComposer } from './handlers/quest.handler';
 import { settingsComposer } from './handlers/settings.handler';
-import { shopComposer } from './handlers/shop.handler';
 import { startComposer } from './handlers/start.handler';
 import { authMiddleware } from './middlewares/auth.middleware';
 
@@ -34,15 +29,9 @@ export function createBot(): Bot<BotContext> {
   bot.use(startComposer);
   bot.use(menuComposer);
   bot.use(learningComposer);
-  bot.use(questComposer);
-  bot.use(bonusComposer);
   bot.use(profileComposer);
-  bot.use(shopComposer);
-  bot.use(achievementComposer);
   bot.use(settingsComposer);
   bot.use(adminComposer);
-  // Registered last so it can never shadow a real feature.
-  bot.use(easterEggComposer);
 
   bot.catch(async (error) => {
     const ctx = error.ctx;

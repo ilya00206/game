@@ -1,11 +1,11 @@
-import { Difficulty, RewardContentType, ShopItemType } from '@prisma/client';
+import { Difficulty } from '@prisma/client';
 import { Composer, InlineKeyboard } from 'grammy';
 import { z } from 'zod';
 import { prisma } from '../../db/prisma';
 import { statsService } from '../../services/stats.service';
 import { CB, cb } from '../callback-data';
 import type { BotContext } from '../context';
-import { CURRENCY, escapeHtml } from '../format';
+import { escapeHtml } from '../format';
 import { adminOnly } from '../middlewares/auth.middleware';
 import { ack, render } from '../render';
 
@@ -15,10 +15,6 @@ adminComposer.use(adminOnly);
 const adminMenuKeyboard = () =>
   new InlineKeyboard()
     .text('📚 Слова', cb(CB.admin, 'words'))
-    .text('🎁 Награды', cb(CB.admin, 'rewards'))
-    .row()
-    .text('🛍 Товары', cb(CB.admin, 'shop'))
-    .text('💛 Секреты', cb(CB.admin, 'eggs'))
     .row()
     .text('📊 Статистика', cb(CB.admin, 'stats'))
     .text('👤 Игроки', cb(CB.admin, 'users'))
@@ -72,122 +68,6 @@ const WIZARDS: Record<string, { title: string; steps: WizardStep[]; finish: (dra
     },
   },
 
-  reward: {
-    title: '🎁 Новая персональная награда',
-    steps: [
-      { key: 'code', prompt: 'Код (латиницей, уникальный):' },
-      { key: 'title', prompt: 'Название:' },
-      { key: 'description', prompt: 'Описание:' },
-      { key: 'icon', prompt: 'Эмодзи (или <code>-</code>):', optional: true },
-      { key: 'price', prompt: 'Цена в валюте:', parse: (value) => Number(value.trim()) },
-      {
-        key: 'contentType',
-        prompt: 'Тип контента: TEXT / PHOTO / VIDEO / ANIMATION / DOCUMENT / AUDIO / VOICE / STICKER',
-        parse: (value) => value.trim().toUpperCase(),
-      },
-      {
-        key: 'contentText',
-        prompt: 'Текст награды (или <code>-</code>). Для медиа пришли файл следующим шагом.',
-        optional: true,
-      },
-      {
-        key: 'contentFileId',
-        prompt: 'Пришли медиа-файл или <code>-</code>, если контент только текстовый.',
-        optional: true,
-      },
-    ],
-    async finish(draft) {
-      const parsed = z
-        .object({
-          code: z.string().min(2).max(64).regex(/^[a-z0-9_-]+$/i, 'Только латиница, цифры, _ и -'),
-          title: z.string().min(1).max(120),
-          description: z.string().min(1).max(500),
-          icon: z.string().max(8).optional(),
-          price: z.number().int().min(0),
-          contentType: z.nativeEnum(RewardContentType).catch(RewardContentType.TEXT),
-          contentText: z.string().max(4000).optional(),
-          contentFileId: z.string().max(300).optional(),
-        })
-        .parse(draft);
-
-      const reward = await prisma.reward.create({
-        data: { ...parsed, icon: parsed.icon ?? '🎁' },
-      });
-      return `✅ Награда создана: ${reward.icon} <b>${escapeHtml(reward.title)}</b> — ${reward.price} ${CURRENCY}`;
-    },
-  },
-
-  shopitem: {
-    title: '🛍 Новый товар',
-    steps: [
-      { key: 'code', prompt: 'Код товара:' },
-      { key: 'title', prompt: 'Название:' },
-      { key: 'description', prompt: 'Описание:' },
-      { key: 'icon', prompt: 'Эмодзи (или <code>-</code>):', optional: true },
-      { key: 'price', prompt: 'Цена:', parse: (value) => Number(value.trim()) },
-      {
-        key: 'type',
-        prompt: 'Тип: STREAK_SHIELD / XP_BOOST / COSMETIC / SPECIAL_REWARD / PERSONAL_REWARD',
-        parse: (value) => value.trim().toUpperCase(),
-      },
-    ],
-    async finish(draft) {
-      const parsed = z
-        .object({
-          code: z.string().min(2).max(64),
-          title: z.string().min(1).max(120),
-          description: z.string().min(1).max(500),
-          icon: z.string().max(8).optional(),
-          price: z.number().int().min(0),
-          type: z.nativeEnum(ShopItemType).catch(ShopItemType.SPECIAL_REWARD),
-        })
-        .parse(draft);
-
-      const item = await prisma.shopItem.create({ data: { ...parsed, icon: parsed.icon ?? '🛍' } });
-      return `✅ Товар создан: ${item.icon} <b>${escapeHtml(item.title)}</b>`;
-    },
-  },
-
-  egg: {
-    title: '💛 Новый секрет',
-    steps: [
-      { key: 'code', prompt: 'Код секрета:' },
-      { key: 'title', prompt: 'Заголовок:' },
-      {
-        key: 'triggerKind',
-        prompt: 'Тип триггера: <code>command</code> / <code>phrase</code> / <code>streak</code> / <code>level</code> / <code>date</code>',
-        parse: (value) => value.trim().toLowerCase(),
-      },
-      { key: 'triggerValue', prompt: 'Значение триггера (например <code>/love</code> или <code>02-14</code>):' },
-      { key: 'contentText', prompt: 'Текст секрета (или <code>-</code>):', optional: true },
-      { key: 'contentFileId', prompt: 'Пришли медиа или <code>-</code>:', optional: true },
-    ],
-    async finish(draft) {
-      const parsed = z
-        .object({
-          code: z.string().min(2).max(64),
-          title: z.string().min(1).max(120),
-          triggerKind: z.enum(['command', 'phrase', 'streak', 'level', 'date']),
-          triggerValue: z.string().min(1).max(120),
-          contentText: z.string().max(4000).optional(),
-          contentFileId: z.string().max(300).optional(),
-        })
-        .parse(draft);
-
-      const numeric = parsed.triggerKind === 'streak' || parsed.triggerKind === 'level';
-      const egg = await prisma.easterEgg.create({
-        data: {
-          code: parsed.code,
-          title: parsed.title,
-          trigger: { kind: parsed.triggerKind, value: numeric ? Number(parsed.triggerValue) : parsed.triggerValue },
-          contentType: parsed.contentFileId ? RewardContentType.PHOTO : RewardContentType.TEXT,
-          contentText: parsed.contentText ?? null,
-          contentFileId: parsed.contentFileId ?? null,
-        },
-      });
-      return `✅ Секрет создан: <b>${escapeHtml(egg.title)}</b>`;
-    },
-  },
 };
 
 // --- menu -------------------------------------------------------------------
@@ -221,8 +101,7 @@ adminComposer.callbackQuery(cb(CB.admin, 'stats'), async (ctx) => {
       `📚 Активных слов: ${overview.words}`,
       `🏁 Тренировок завершено: ${overview.sessions}`,
       `✍️ Ответов: ${overview.answers}`,
-      `💎 Валюты выдано: ${overview.currencyIssued}`,
-      `🛍 Покупок: ${overview.purchases}`,
+      `💎 Всего гемов: ${overview.gems}`,
     ].join('\n'),
     { keyboard: new InlineKeyboard().text('⬅️ Назад', cb(CB.admin, 'menu')) },
   );
@@ -235,7 +114,7 @@ adminComposer.callbackQuery(cb(CB.admin, 'users'), async (ctx) => {
   const lines = ['👤 <b>Игроки</b>', ''];
   for (const user of users) {
     lines.push(
-      `• ${escapeHtml(user.firstName ?? String(user.telegramId))} — ур.${user.level}, 🔥${user.currentStreak}, ${user.balance} ${CURRENCY}`,
+      `• ${escapeHtml(user.firstName ?? String(user.telegramId))} — 🔥${user.currentStreak}, 💎${user.gems}`,
     );
   }
 
@@ -260,68 +139,6 @@ adminComposer.callbackQuery(cb(CB.admin, 'words'), async (ctx) => {
     {
       keyboard: new InlineKeyboard()
         .text('➕ Добавить слово', cb(CB.admin, 'new', 'word'))
-        .row()
-        .text('⬅️ Назад', cb(CB.admin, 'menu')),
-    },
-  );
-});
-
-adminComposer.callbackQuery(cb(CB.admin, 'rewards'), async (ctx) => {
-  await ack(ctx);
-  const rewards = await prisma.reward.findMany({ orderBy: { createdAt: 'desc' }, take: 20 });
-
-  await render(
-    ctx,
-    [
-      '🎁 <b>Персональные награды</b>',
-      '',
-      ...(rewards.length
-        ? rewards.map((reward) => `${reward.icon} ${escapeHtml(reward.title)} — ${reward.price} ${CURRENCY}`)
-        : ['Пока пусто.']),
-    ].join('\n'),
-    {
-      keyboard: new InlineKeyboard()
-        .text('➕ Создать награду', cb(CB.admin, 'new', 'reward'))
-        .row()
-        .text('⬅️ Назад', cb(CB.admin, 'menu')),
-    },
-  );
-});
-
-adminComposer.callbackQuery(cb(CB.admin, 'shop'), async (ctx) => {
-  await ack(ctx);
-  const items = await prisma.shopItem.findMany({ orderBy: { sortOrder: 'asc' } });
-
-  await render(
-    ctx,
-    [
-      '🛍 <b>Товары</b>',
-      '',
-      ...(items.length
-        ? items.map((item) => `${item.icon} ${escapeHtml(item.title)} — ${item.price} ${CURRENCY}`)
-        : ['Пока пусто.']),
-    ].join('\n'),
-    {
-      keyboard: new InlineKeyboard()
-        .text('➕ Создать товар', cb(CB.admin, 'new', 'shopitem'))
-        .row()
-        .text('⬅️ Назад', cb(CB.admin, 'menu')),
-    },
-  );
-});
-
-adminComposer.callbackQuery(cb(CB.admin, 'eggs'), async (ctx) => {
-  await ack(ctx);
-  const eggs = await prisma.easterEgg.findMany({ orderBy: { createdAt: 'desc' }, take: 20 });
-
-  await render(
-    ctx,
-    ['💛 <b>Секреты</b>', '', ...(eggs.length ? eggs.map((egg) => `• ${escapeHtml(egg.title)}`) : ['Пока пусто.'])].join(
-      '\n',
-    ),
-    {
-      keyboard: new InlineKeyboard()
-        .text('➕ Создать секрет', cb(CB.admin, 'new', 'egg'))
         .row()
         .text('⬅️ Назад', cb(CB.admin, 'menu')),
     },

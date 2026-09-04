@@ -55,7 +55,7 @@ settingsComposer.callbackQuery(cb(CB.settings, 'open'), async (ctx) => {
 
 settingsComposer.callbackQuery(/^set:toggle:(\w+)$/, async (ctx) => {
   const key = ctx.match[1];
-  const allowed = ['notificationsEnabled', 'dailyReminderEnabled', 'streakReminderEnabled', 'questReminderEnabled'];
+  const allowed = ['notificationsEnabled', 'dailyReminderEnabled', 'streakReminderEnabled'];
   if (!key || !allowed.includes(key)) {
     await ack(ctx);
     return;

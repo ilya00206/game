@@ -2,7 +2,6 @@ import { webhookCallback } from 'grammy';
 import { BOT_COMMANDS, createBot } from './bot/bot';
 import { env } from './config/env';
 import { connectDatabase, disconnectDatabase } from './db/prisma';
-import { registerGameSubscribers } from './events/subscribers';
 import { startScheduler } from './jobs/scheduler';
 import { startHealthServer } from './server/health';
 import { logger } from './utils/logger';
@@ -11,7 +10,6 @@ async function main(): Promise<void> {
   logger.info({ nodeEnv: env.NODE_ENV, mode: env.BOT_MODE }, 'starting lingua-quest-bot');
 
   await connectDatabase();
-  registerGameSubscribers();
 
   const bot = createBot();
   const useWebhook = env.BOT_MODE === 'webhook' && Boolean(env.WEBHOOK_URL);

@@ -1,7 +1,6 @@
 import { AnswerGrade, ExerciseType } from '@prisma/client';
 import { Composer } from 'grammy';
 import { learningConfig } from '../../config/game.config';
-import { drainNotices } from '../../events/notice-buffer';
 import type { Exercise } from '../../services/exercise/exercise.types';
 import { learningService } from '../../services/learning.service';
 import { streakService } from '../../services/streak.service';
@@ -76,7 +75,6 @@ async function showSummary(ctx: BotContext, sessionId: string): Promise<void> {
   }
 
   const streak = await streakService.registerActivity(ctx.user);
-  const notices = drainNotices(ctx.user.id);
 
   const accuracy = summary.totalQuestions > 0 ? summary.correctAnswers / summary.totalQuestions : 0;
 
@@ -86,20 +84,13 @@ async function showSummary(ctx: BotContext, sessionId: string): Promise<void> {
     `${summary.correctAnswers}/${summary.totalQuestions} правильных   (${formatPercent(accuracy)})`,
     summary.wrongAnswers > 0 ? `🔁 ${summary.wrongAnswers} ${pluralRu(summary.wrongAnswers, ['слово требует', 'слова требуют', 'слов требуют'])} повторения` : '✨ Ни одной ошибки!',
     '',
-    `+${summary.xpEarned} XP`,
-    `+${summary.currencyEarned} ${CURRENCY}`,
+    `+${summary.gemsEarned} ${CURRENCY}`,
     summary.masteredWords > 0 ? `🌟 Выучено полностью: ${summary.masteredWords}` : '',
     '',
     streak.changed
-      ? `🔥 Streak: ${streak.currentStreak} ${pluralRu(streak.currentStreak, ['день', 'дня', 'дней'])}${
-          streak.protectedByShield ? ' (щит спас серию 🛡)' : ''
-        }`
+      ? `🔥 Streak: ${streak.currentStreak} ${pluralRu(streak.currentStreak, ['день', 'дня', 'дней'])}`
       : `🔥 Streak: ${ctx.user.currentStreak} — уже отмечен сегодня`,
   ];
-
-  if (notices.length) {
-    lines.push('', ...notices.map((notice) => `${notice.icon} ${notice.text}`));
-  }
 
   await render(ctx, lines.filter(Boolean).join('\n'), { keyboard: summaryKeyboard() });
 }

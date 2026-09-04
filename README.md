@@ -1,8 +1,6 @@
 # 🌸 Lingua Quest Bot
 
-Telegram-бот для изучения иностранного языка в формате уютной игры: карточки, интервальное
-повторение, streak, XP и уровни, внутриигровая валюта с полноценным ledger, квесты,
-достижения, магазин, ежедневные бонусы и персональные награды от администратора.
+Telegram-бот для изучения иностранного языка: карточки, интервальное повторение, streak и гемы.
 
 ---
 
@@ -32,17 +30,11 @@ Prisma / Repositories (src/db)
 PostgreSQL
 ```
 
-Дополнительно работает внутренняя шина игровых событий (`src/events`): сервисы публикуют
-факты (`WORD_ANSWERED`, `SESSION_COMPLETED`, `STREAK_UPDATED`, …), а квесты, достижения и
-аналитика подписываются на них. Благодаря этому новая механика не требует правок в
-learning/streak/economy.
-
 Ключевые модули:
 
 ```text
-src/config/game.config.ts      все игровые числа (нет magic numbers в логике)
-src/services/economy.service.ts    ledger: любое изменение баланса = транзакция
-src/services/reward.service.ts     единая точка выдачи наград
+src/config/game.config.ts      настройки тренировок и награды в гемах
+src/services/streak.service.ts     учёт ежедневной серии
 src/services/srs/                  подменяемый алгоритм интервального повторения
 src/services/exercise/             реестр типов упражнений
 ```
@@ -57,7 +49,7 @@ cd lingua-quest-bot
 npm install
 cp .env.example .env      # заполнить BOT_TOKEN, DATABASE_URL, ADMIN_TELEGRAM_ID
 npm run db:migrate        # создаст схему и применит миграции
-npm run db:seed           # слова, квесты, достижения, магазин, пасхалки
+npm run db:seed        # слова
 npm run dev
 ```
 
@@ -76,8 +68,7 @@ npm run dev
 | `WEBHOOK_SECRET` | нет | secret token для проверки webhook |
 | `DEFAULT_TIMEZONE` | нет | таймзона новых пользователей |
 | `DEFAULT_LEARNING_LANGUAGE` | нет | язык изучения по умолчанию |
-| `CURRENCY_NAME`, `CURRENCY_SYMBOL` | нет | название и символ валюты |
-| `EASTER_EGGS_ENABLED` | нет | включить слой пасхалок |
+| `CURRENCY_NAME`, `CURRENCY_SYMBOL` | нет | название и символ гемов |
 
 Секреты никогда не коммитятся: `.env` в `.gitignore`, логи редактируют токены.
 
@@ -93,9 +84,7 @@ npm run db:seed        # наполнение контентом
 ```
 
 Основные сущности: `User`, `Word`, `UserWord`, `LearningSession`, `LearningAnswer`,
-`EconomyTransaction`, `ShopItem`, `Purchase`, `InventoryItem`, `Quest`, `UserQuest`,
-`Achievement`, `UserAchievement`, `Reward`, `RewardPurchase`, `DailyBonusClaim`,
-`DailyActivity`, `NotificationSettings`, `GameEventLog`, `EasterEgg`, `UserEasterEgg`.
+`DailyActivity`, `NotificationSettings`.
 
 ---
 
@@ -123,27 +112,18 @@ npm run db:seed        # наполнение контентом
 ⚙️ Admin
 ├── 👤 Users        просмотр и поиск игроков
 ├── 📚 Words        добавление / редактирование / деактивация слов
-├── 🎯 Quests       список квестов
-├── 🏆 Achievements список достижений
-├── 🛍 Shop         товары магазина
-├── 🎁 Rewards      создание персональных наград с любым контентом
-└── 📊 Statistics   сводка по игре и аудит экономики
+└── 📊 Statistics   сводка по игре
 ```
 
-Награды и цены создаются данными, а не кодом.
+За каждый правильный ответ игрок получает один гем.
 
 ---
 
 ## Гарантии надёжности
 
-- каждое изменение баланса создаёт запись в `EconomyTransaction`;
-- операции с наградами несут `idempotencyKey` — повторный Telegram update ничего не удваивает;
-- `SELECT ... FOR UPDATE` + одна PostgreSQL-транзакция на критический путь;
-- уникальные ключи защищают daily bonus (`userId + localDay`), ответы сессии
-  (`sessionId + position`), достижения (`userId + achievementId`), квесты
-  (`userId + questId + periodKey`);
-- баланс не может уйти в минус;
-- callback data содержит только идентификаторы: цены и награды читаются из БД.
+- уникальный ключ ответа (`sessionId + position`) защищает от повторной обработки Telegram update;
+- одна завершённая тренировка начисляет её гемы только один раз;
+- streak обновляется в PostgreSQL-транзакции, поэтому параллельные тренировки не удваивают серию.
 
 ---
 

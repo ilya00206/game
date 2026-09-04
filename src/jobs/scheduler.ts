@@ -1,7 +1,6 @@
 import type { Bot } from 'grammy';
 import { GrammyError } from 'grammy';
 import { prisma } from '../db/prisma';
-import { questService } from '../services/quest.service';
 import { childLogger } from '../utils/logger';
 import { getDayKey, getLocalParts } from '../utils/time';
 import type { BotContext } from '../bot/context';
@@ -82,7 +81,6 @@ export function startScheduler(bot: Bot<BotContext>): () => void {
   const tick = async () => {
     const now = new Date();
     try {
-      await questService.expireOutdated(now);
       await sendReminders(bot, now);
     } catch (error) {
       log.error({ error }, 'scheduler tick failed');

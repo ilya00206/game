@@ -1,8 +1,6 @@
 import type { User } from '@prisma/client';
-import { GameEventType } from '@prisma/client';
 import { env } from '../config/env';
 import { prisma, type Db } from '../db/prisma';
-import { gameEvents } from '../events/event-bus';
 import { isValidTimeZone } from '../utils/time';
 
 export interface TelegramIdentity {
@@ -50,7 +48,6 @@ export const userService = {
       },
     });
 
-    await gameEvents.emit(GameEventType.USER_REGISTERED, { userId: user.id });
     return { user, created: true };
   },
 
@@ -83,7 +80,6 @@ export const userService = {
       notificationsEnabled: boolean;
       dailyReminderEnabled: boolean;
       streakReminderEnabled: boolean;
-      questReminderEnabled: boolean;
       reminderTime: string;
     }>,
   ) {
