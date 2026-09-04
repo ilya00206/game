@@ -71,4 +71,28 @@ export const statsService = {
       maxStreak: maxStreak._max.longestStreak ?? 0,
     };
   },
+
+  /** Sessions and answers from the past week, excluding one user (typically the viewing admin). */
+  async getRecentActivity(excludeUserId?: string, sinceDays = 7) {
+    const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
+    const userFilter = excludeUserId ? { userId: { not: excludeUserId } } : {};
+
+    const [sessions, answers] = await Promise.all([
+      prisma.learningSession.findMany({
+        where: { startedAt: { gte: since }, ...userFilter },
+        orderBy: { startedAt: 'desc' },
+        include: { user: { select: { firstName: true, telegramId: true } } },
+      }),
+      prisma.learningAnswer.findMany({
+        where: { createdAt: { gte: since }, ...userFilter },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: { select: { firstName: true, telegramId: true } },
+          word: { select: { original: true, translation: true } },
+        },
+      }),
+    ]);
+
+    return { sessions, answers };
+  },
 };

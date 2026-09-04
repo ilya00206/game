@@ -19,6 +19,8 @@ const adminMenuKeyboard = () =>
     .text('📊 Статистика', cb(CB.admin, 'stats'))
     .text('👤 Игроки', cb(CB.admin, 'users'))
     .row()
+    .text('🕓 Активность', cb(CB.admin, 'activity'))
+    .row()
     .text('⬅️ В меню', cb(CB.menu, 'main'));
 
 const cancelKeyboard = () => new InlineKeyboard().text('✖️ Отмена', cb(CB.admin, 'cancel'));
@@ -120,6 +122,39 @@ adminComposer.callbackQuery(cb(CB.admin, 'stats'), async (ctx) => {
     ].join('\n'),
     { keyboard: new InlineKeyboard().text('⬅️ Назад', cb(CB.admin, 'menu')) },
   );
+});
+
+adminComposer.callbackQuery(cb(CB.admin, 'activity'), async (ctx) => {
+  await ack(ctx);
+  const { sessions, answers } = await statsService.getRecentActivity(ctx.user.id);
+
+  const lines = ['🕓 <b>Тренировки за неделю (другие игроки)</b>', ''];
+  if (!sessions.length) lines.push('Пока нет сессий.');
+  for (const session of sessions.slice(0, 30)) {
+    const who = escapeHtml(session.user.firstName ?? String(session.user.telegramId));
+    const started = session.startedAt.toLocaleString('ru-RU', { timeZone: 'UTC' });
+    const status = session.status === 'COMPLETED' ? '✅' : session.status === 'ABANDONED' ? '✖️' : '▶️';
+    const duration = session.completedAt
+      ? `${Math.max(0, Math.round((session.completedAt.getTime() - session.startedAt.getTime()) / 1000))}с`
+      : '—';
+    lines.push(`${status} ${who} — ${session.correctAnswers}/${session.totalQuestions}, ${duration} (${started})`);
+  }
+  if (sessions.length > 30) lines.push(`… и ещё ${sessions.length - 30}`);
+
+  lines.push('', '✍️ <b>Последние ответы</b>', '');
+  if (!answers.length) lines.push('Пока нет ответов.');
+  for (const answer of answers.slice(0, 30)) {
+    const who = escapeHtml(answer.user.firstName ?? String(answer.user.telegramId));
+    const when = answer.createdAt.toLocaleString('ru-RU', { timeZone: 'UTC' });
+    const mark = answer.isCorrect ? '✅' : '❌';
+    const responseTime = answer.responseTimeMs != null ? `${Math.round(answer.responseTimeMs / 1000)}с` : '—';
+    lines.push(
+      `${mark} ${who}: ${escapeHtml(answer.word.original)} — ${escapeHtml(answer.word.translation)} (${answer.grade}, ${responseTime}, ${when})`,
+    );
+  }
+  if (answers.length > 30) lines.push(`… и ещё ${answers.length - 30}`);
+
+  await render(ctx, lines.join('\n'), { keyboard: new InlineKeyboard().text('⬅️ Назад', cb(CB.admin, 'menu')) });
 });
 
 adminComposer.callbackQuery(cb(CB.admin, 'users'), async (ctx) => {

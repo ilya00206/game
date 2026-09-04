@@ -165,6 +165,7 @@ export const learningService = {
       },
     });
 
+    log.info({ userId: user.id, sessionId: session.id, groupId: groupId ?? null, wordCount: wordIds.length }, 'session started');
 
     return { session, resumed: false };
   },
@@ -341,6 +342,19 @@ export const learningService = {
 
     const nextExercise = outcome.finished ? null : await learningService.getCurrentExercise(sessionId);
 
+    log.info(
+      {
+        userId: user.id,
+        sessionId,
+        wordId: outcome.wordId,
+        position,
+        grade,
+        isCorrect: outcome.isCorrect,
+        responseTimeMs: responseTimeMs ?? null,
+      },
+      'answer submitted',
+    );
+
     return {
       accepted: true,
       isCorrect: outcome.isCorrect,
@@ -407,7 +421,7 @@ export const learningService = {
       },
     });
 
-    log.info({ userId: user.id, sessionId, gems: totalGemsEarned }, 'session completed');
+    log.info({ userId: user.id, sessionId, gems: totalGemsEarned, durationSeconds }, 'session completed');
 
     return {
       sessionId,
