@@ -5,6 +5,10 @@ const booleanish = z
   .union([z.boolean(), z.string()])
   .transform((value) => (typeof value === 'boolean' ? value : ['1', 'true', 'yes', 'on'].includes(value.toLowerCase())));
 
+// Empty env vars arrive as "" rather than undefined; treat them as unset for optional fields.
+const optionalString = () => z.preprocess((value) => (value === '' ? undefined : value), z.string().optional());
+const optionalUrl = () => z.preprocess((value) => (value === '' ? undefined : value), z.string().url().optional());
+
 const schema = z.object({
   BOT_TOKEN: z.string().min(10, 'BOT_TOKEN is required'),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
@@ -19,11 +23,11 @@ const schema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
 
   BOT_MODE: z.enum(['polling', 'webhook']).default('polling'),
-  WEBHOOK_URL: z.string().url().optional(),
-  WEBHOOK_SECRET: z.string().optional(),
+  WEBHOOK_URL: optionalUrl(),
+  WEBHOOK_SECRET: optionalString(),
 
   DEFAULT_TIMEZONE: z.string().default('Europe/Moscow'),
-  DEFAULT_LEARNING_LANGUAGE: z.string().default('fr'),
+  DEFAULT_LEARNING_LANGUAGE: z.string().default('pl'),
 
   CURRENCY_NAME: z.string().default('Кристаллы'),
   CURRENCY_SYMBOL: z.string().default('💎'),

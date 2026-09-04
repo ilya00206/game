@@ -132,7 +132,7 @@ model User {
   // interface language of the bot
   language String @default("ru")
   // language the user is learning
-  learningLanguage String @default("fr")
+  learningLanguage String @default("pl")
   timezone         String @default("Europe/Moscow")
 
   isAdmin  Boolean @default(false)

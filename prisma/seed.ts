@@ -15,31 +15,31 @@ const prisma = new PrismaClient();
  */
 
 const WORDS = [
-  { original: 'bonjour', translation: 'привет', pronunciation: 'бонжур', category: 'greetings', difficulty: Difficulty.EASY, exampleSentence: 'Bonjour, comment ça va ?', exampleTranslation: 'Привет, как дела?' },
-  { original: 'merci', translation: 'спасибо', pronunciation: 'мерси', category: 'greetings', difficulty: Difficulty.EASY, exampleSentence: 'Merci beaucoup !', exampleTranslation: 'Большое спасибо!' },
-  { original: 'au revoir', translation: 'пока', pronunciation: 'о ревуар', category: 'greetings', difficulty: Difficulty.EASY, exampleSentence: 'Au revoir et à bientôt !', exampleTranslation: 'Пока и до скорого!' },
-  { original: 'bonne nuit', translation: 'спокойной ночи', pronunciation: 'бон нюи', category: 'greetings', difficulty: Difficulty.EASY, exampleSentence: 'Bonne nuit, dors bien.', exampleTranslation: 'Спокойной ночи, спи сладко.' },
-  { original: 'bonjour matin', translation: 'доброе утро', pronunciation: 'бонжур матан', category: 'greetings', difficulty: Difficulty.EASY },
-  { original: 'maison', translation: 'дом', pronunciation: 'мезон', category: 'basics', difficulty: Difficulty.EASY, exampleSentence: 'Ma maison est petite.', exampleTranslation: 'Мой дом маленький.' },
-  { original: 'chat', translation: 'кот', pronunciation: 'ша', category: 'animals', difficulty: Difficulty.EASY, exampleSentence: 'Le chat dort.', exampleTranslation: 'Кот спит.' },
-  { original: 'chien', translation: 'собака', pronunciation: 'шьен', category: 'animals', difficulty: Difficulty.EASY },
-  { original: 'fleur', translation: 'цветок', pronunciation: 'флёр', category: 'nature', difficulty: Difficulty.EASY, exampleSentence: 'Cette fleur est pour toi.', exampleTranslation: 'Этот цветок для тебя.' },
-  { original: 'soleil', translation: 'солнце', pronunciation: 'солей', category: 'nature', difficulty: Difficulty.EASY },
-  { original: 'étoile', translation: 'звезда', pronunciation: 'этуаль', category: 'nature', difficulty: Difficulty.MEDIUM },
-  { original: 'amour', translation: 'любовь', pronunciation: 'амур', category: 'feelings', difficulty: Difficulty.EASY, exampleSentence: "L'amour est doux.", exampleTranslation: 'Любовь сладкая.' },
-  { original: 'cœur', translation: 'сердце', pronunciation: 'кёр', category: 'feelings', difficulty: Difficulty.MEDIUM },
-  { original: 'sourire', translation: 'улыбка', pronunciation: 'сурир', category: 'feelings', difficulty: Difficulty.MEDIUM },
-  { original: 'câlin', translation: 'обнимашки', pronunciation: 'кален', category: 'feelings', difficulty: Difficulty.MEDIUM },
-  { original: 'café', translation: 'кофе', pronunciation: 'кафе', category: 'food', difficulty: Difficulty.EASY },
-  { original: 'pain', translation: 'хлеб', pronunciation: 'пэн', category: 'food', difficulty: Difficulty.EASY },
-  { original: 'fromage', translation: 'сыр', pronunciation: 'фромаж', category: 'food', difficulty: Difficulty.MEDIUM },
-  { original: 'chocolat', translation: 'шоколад', pronunciation: 'шоколя', category: 'food', difficulty: Difficulty.EASY },
-  { original: 'gâteau', translation: 'торт', pronunciation: 'гато', category: 'food', difficulty: Difficulty.MEDIUM },
-  { original: 'livre', translation: 'книга', pronunciation: 'ливр', category: 'objects', difficulty: Difficulty.EASY },
-  { original: 'voyage', translation: 'путешествие', pronunciation: 'вояж', category: 'travel', difficulty: Difficulty.MEDIUM },
-  { original: 'demain', translation: 'завтра', pronunciation: 'демэн', category: 'time', difficulty: Difficulty.EASY },
-  { original: 'toujours', translation: 'всегда', pronunciation: 'тужур', category: 'time', difficulty: Difficulty.MEDIUM },
-  { original: 'ensemble', translation: 'вместе', pronunciation: 'ансамбль', category: 'feelings', difficulty: Difficulty.MEDIUM },
+  { original: 'cześć', translation: 'привет', pronunciation: 'чещчь', category: 'greetings', difficulty: Difficulty.EASY, exampleSentence: 'Cześć, jak się masz?', exampleTranslation: 'Привет, как дела?' },
+  { original: 'dziękuję', translation: 'спасибо', pronunciation: 'дженкуе', category: 'greetings', difficulty: Difficulty.EASY, exampleSentence: 'Dziękuję bardzo!', exampleTranslation: 'Большое спасибо!' },
+  { original: 'do widzenia', translation: 'до свидания', pronunciation: 'до видзеня', category: 'greetings', difficulty: Difficulty.EASY, exampleSentence: 'Do widzenia i do zobaczenia!', exampleTranslation: 'До свидания и до встречи!' },
+  { original: 'dobranoc', translation: 'спокойной ночи', pronunciation: 'добраноц', category: 'greetings', difficulty: Difficulty.EASY, exampleSentence: 'Dobranoc, śpij dobrze.', exampleTranslation: 'Спокойной ночи, спи сладко.' },
+  { original: 'dzień dobry', translation: 'доброе утро', pronunciation: 'дзень добры', category: 'greetings', difficulty: Difficulty.EASY },
+  { original: 'dom', translation: 'дом', pronunciation: 'дом', category: 'basics', difficulty: Difficulty.EASY, exampleSentence: 'Mój dom jest mały.', exampleTranslation: 'Мой дом маленький.' },
+  { original: 'kot', translation: 'кот', pronunciation: 'кот', category: 'animals', difficulty: Difficulty.EASY, exampleSentence: 'Kot śpi.', exampleTranslation: 'Кот спит.' },
+  { original: 'pies', translation: 'собака', pronunciation: 'пес', category: 'animals', difficulty: Difficulty.EASY },
+  { original: 'kwiat', translation: 'цветок', pronunciation: 'квят', category: 'nature', difficulty: Difficulty.EASY, exampleSentence: 'Ten kwiat jest dla ciebie.', exampleTranslation: 'Этот цветок для тебя.' },
+  { original: 'słońce', translation: 'солнце', pronunciation: 'свонце', category: 'nature', difficulty: Difficulty.EASY },
+  { original: 'gwiazda', translation: 'звезда', pronunciation: 'гвязда', category: 'nature', difficulty: Difficulty.MEDIUM },
+  { original: 'miłość', translation: 'любовь', pronunciation: 'мивощчь', category: 'feelings', difficulty: Difficulty.EASY, exampleSentence: 'Miłość jest słodka.', exampleTranslation: 'Любовь сладкая.' },
+  { original: 'serce', translation: 'сердце', pronunciation: 'серце', category: 'feelings', difficulty: Difficulty.MEDIUM },
+  { original: 'uśmiech', translation: 'улыбка', pronunciation: 'ущмех', category: 'feelings', difficulty: Difficulty.MEDIUM },
+  { original: 'przytulanie', translation: 'обнимашки', pronunciation: 'пшитуляне', category: 'feelings', difficulty: Difficulty.MEDIUM },
+  { original: 'kawa', translation: 'кофе', pronunciation: 'кава', category: 'food', difficulty: Difficulty.EASY },
+  { original: 'chleb', translation: 'хлеб', pronunciation: 'хлеб', category: 'food', difficulty: Difficulty.EASY },
+  { original: 'ser', translation: 'сыр', pronunciation: 'сер', category: 'food', difficulty: Difficulty.MEDIUM },
+  { original: 'czekolada', translation: 'шоколад', pronunciation: 'чеколяда', category: 'food', difficulty: Difficulty.EASY },
+  { original: 'ciasto', translation: 'торт', pronunciation: 'цясто', category: 'food', difficulty: Difficulty.MEDIUM },
+  { original: 'książka', translation: 'книга', pronunciation: 'кщёнжка', category: 'objects', difficulty: Difficulty.EASY },
+  { original: 'podróż', translation: 'путешествие', pronunciation: 'подруж', category: 'travel', difficulty: Difficulty.MEDIUM },
+  { original: 'jutro', translation: 'завтра', pronunciation: 'ютро', category: 'time', difficulty: Difficulty.EASY },
+  { original: 'zawsze', translation: 'всегда', pronunciation: 'завше', category: 'time', difficulty: Difficulty.MEDIUM },
+  { original: 'razem', translation: 'вместе', pronunciation: 'разем', category: 'feelings', difficulty: Difficulty.MEDIUM },
 ];
 
 const QUESTS = [
@@ -75,12 +75,12 @@ const SHOP_ITEMS = [
 
 const EASTER_EGGS = [
   { code: 'love', title: 'Секретное сообщение', trigger: { kind: 'command', value: '/love' }, contentText: 'Ты самая лучшая. Спасибо, что учишься вместе со мной 💛', reward: { currency: 100, xp: 20 }, contentType: RewardContentType.TEXT },
-  { code: 'je_taime', title: 'Je t’aime', trigger: { kind: 'phrase', value: 'je t’aime' }, contentText: 'Moi aussi, je t’aime ❤️', reward: { currency: 150, xp: 30 }, contentType: RewardContentType.TEXT },
+  { code: 'kocham_cie', title: 'Kocham Cię', trigger: { kind: 'phrase', value: 'kocham cię' }, contentText: 'Ja też Cię kocham ❤️', reward: { currency: 150, xp: 30 }, contentType: RewardContentType.TEXT },
   { code: 'streak_7_secret', title: 'Неделя вместе', trigger: { kind: 'streak', value: 7 }, contentText: 'Целая неделя подряд! Я тобой горжусь 🌸', reward: { currency: 200, xp: 50 }, contentType: RewardContentType.TEXT },
 ];
 
 async function main(): Promise<void> {
-  const language = process.env.DEFAULT_LEARNING_LANGUAGE ?? 'fr';
+  const language = process.env.DEFAULT_LEARNING_LANGUAGE ?? 'pl';
 
   for (const word of WORDS) {
     await prisma.word.upsert({

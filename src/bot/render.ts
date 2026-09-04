@@ -1,7 +1,7 @@
 import { GrammyError } from 'grammy';
 import type { InlineKeyboard } from 'grammy';
-import type { BotContext } from '../context';
-import { childLogger } from '../../utils/logger';
+import type { BotContext } from './context';
+import { childLogger } from '../utils/logger';
 
 const log = childLogger('render');
 
