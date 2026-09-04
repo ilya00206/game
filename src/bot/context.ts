@@ -3,6 +3,12 @@ import type { Context, SessionFlavor } from 'grammy';
 
 /** Transient per-chat state, e.g. the current admin wizard step. */
 export interface SessionData {
+  learningGroupId?: string;
+  wordEntry?: {
+    step: 'groupName' | 'original' | 'translation';
+    groupId?: string;
+    original?: string;
+  };
   admin?: {
     action: string;
     step: string;

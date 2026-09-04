@@ -60,6 +60,7 @@ npm run dev
 | `BOT_TOKEN` | да | токен от @BotFather |
 | `DATABASE_URL` | да | строка подключения PostgreSQL |
 | `ADMIN_TELEGRAM_ID` | да | числовой Telegram id администратора |
+| `ALLOWED_TELEGRAM_IDS` | нет | список Telegram id через запятую; пустое значение разрешает всех пользователей |
 | `NODE_ENV` | нет | `development` / `production` |
 | `LOG_LEVEL` | нет | уровень pino, по умолчанию `info` |
 | `PORT` | нет | порт health-check сервера |
@@ -67,7 +68,6 @@ npm run dev
 | `WEBHOOK_URL` | при webhook | публичный https-адрес деплоя |
 | `WEBHOOK_SECRET` | нет | secret token для проверки webhook |
 | `DEFAULT_TIMEZONE` | нет | таймзона новых пользователей |
-| `DEFAULT_LEARNING_LANGUAGE` | нет | язык изучения по умолчанию |
 | `CURRENCY_NAME`, `CURRENCY_SYMBOL` | нет | название и символ солнышек |
 
 Секреты никогда не коммитятся: `.env` в `.gitignore`, логи редактируют токены.

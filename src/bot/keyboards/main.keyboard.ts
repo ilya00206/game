@@ -4,6 +4,9 @@ import { CB, cb } from '../callback-data';
 export function mainMenuKeyboard(isAdmin: boolean): InlineKeyboard {
   const keyboard = new InlineKeyboard()
     .text('📚 Учиться', cb(CB.learn, 'start'))
+    .row()
+    .text('➕ Добавить слово', cb(CB.learn, 'add'))
+    .row()
     .text('📊 Прогресс', cb(CB.progress, 'open'))
     .row()
     .text('👤 Профиль', cb(CB.profile, 'open'))

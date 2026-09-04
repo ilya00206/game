@@ -67,4 +67,22 @@ export const streakService = {
     return user.lastActivityDay === getDayKey(now, user.timezone);
   },
 
+  async restoreStreak(userId: string, now = new Date()): Promise<User> {
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const currentStreak = Math.max(user.currentStreak, user.longestStreak);
+
+    const restored = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        currentStreak,
+        longestStreak: currentStreak,
+        lastActivityDay: getDayKey(now, user.timezone),
+        lastActivityAt: now,
+      },
+    });
+
+    log.info({ userId, streak: restored.currentStreak }, 'streak restored by admin');
+    return restored;
+  },
+
 };

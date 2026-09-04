@@ -41,7 +41,7 @@ export const userService = {
         firstName: identity.firstName ?? null,
         lastName: identity.lastName ?? null,
         language: identity.languageCode?.slice(0, 2) ?? 'ru',
-        learningLanguage: env.DEFAULT_LEARNING_LANGUAGE,
+        learningLanguage: 'pl',
         timezone: env.DEFAULT_TIMEZONE,
         isAdmin: identity.telegramId === env.ADMIN_TELEGRAM_ID,
         notificationSettings: { create: {} },
@@ -60,10 +60,6 @@ export const userService = {
       throw new Error(`Unknown timezone: ${timezone}`);
     }
     return prisma.user.update({ where: { id: userId }, data: { timezone } });
-  },
-
-  async setLearningLanguage(userId: string, language: string): Promise<User> {
-    return prisma.user.update({ where: { id: userId }, data: { learningLanguage: language } });
   },
 
   async getNotificationSettings(userId: string) {

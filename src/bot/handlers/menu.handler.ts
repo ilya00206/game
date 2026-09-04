@@ -1,17 +1,17 @@
 import { Composer } from 'grammy';
+import { learningService } from '../../services/learning.service';
+import { streakService } from '../../services/streak.service';
 import { CB, cb } from '../callback-data';
 import type { BotContext } from '../context';
-import { escapeHtml, formatCurrency } from '../format';
+import { CURRENCY, escapeHtml } from '../format';
 import { mainMenuKeyboard } from '../keyboards/main.keyboard';
 import { ack, render } from '../render';
-import { streakService } from '../../services/streak.service';
-import { learningService } from '../../services/learning.service';
 
 export const menuComposer = new Composer<BotContext>();
 
 export async function renderMainMenu(ctx: BotContext, greeting?: string): Promise<void> {
   const user = ctx.user;
-  const preview = await learningService.getSessionPreview(user);
+  const preview = await learningService.getSessionPreview(user, ctx.session.learningGroupId);
   const activeToday = await streakService.isActiveToday(user);
 
   const lines = [
@@ -19,11 +19,7 @@ export async function renderMainMenu(ctx: BotContext, greeting?: string): Promis
     `🌸 <b>Главное меню</b>`,
     '',
     `🔥 Streak: ${user.currentStreak} ${activeToday ? '(сегодня отмечен)' : '(сегодня ещё нет)'}`,
-    `☀️ Солнышки: ${formatCurrency(user.gems)}`,
-    '',
-    preview.plannedSize > 0
-      ? `📚 На сегодня готово ${preview.plannedSize} ${preview.plannedSize === 1 ? 'карточка' : 'карточек'}`
-      : '📚 Все слова повторены — можно отдохнуть',
+    `${CURRENCY} Солнышки: ${user.gems}`,
   ].filter(Boolean);
 
   await render(ctx, lines.join('\n'), { keyboard: mainMenuKeyboard(user.isAdmin) });
@@ -31,6 +27,7 @@ export async function renderMainMenu(ctx: BotContext, greeting?: string): Promis
 
 menuComposer.callbackQuery(cb(CB.menu, 'main'), async (ctx) => {
   await ack(ctx);
+  ctx.session.wordEntry = undefined;
   await renderMainMenu(ctx);
 });
 
@@ -43,5 +40,5 @@ menuComposer.command('menu', async (ctx) => {
 });
 
 export function greetingFor(firstName: string | null): string {
-  return `Привет, ${escapeHtml(firstName ?? 'путешественница')}! 💛`;
+  return `Привет, ${escapeHtml(firstName ?? 'Игрок')}! ❤️`;
 }

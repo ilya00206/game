@@ -4,6 +4,13 @@ import { z } from 'zod';
 // Empty env vars arrive as "" rather than undefined; treat them as unset for optional fields.
 const optionalString = () => z.preprocess((value) => (value === '' ? undefined : value), z.string().optional());
 const optionalUrl = () => z.preprocess((value) => (value === '' ? undefined : value), z.string().url().optional());
+const telegramIdList = () =>
+  z.preprocess(
+    (value) => (typeof value === 'string' ? value.split(',').map((id) => id.trim()).filter(Boolean) : []),
+    z
+      .array(z.string().regex(/^\d+$/, 'Telegram ids must be numeric'))
+      .transform((ids) => ids.map((id) => BigInt(id))),
+  );
 
 const schema = z.object({
   BOT_TOKEN: z.string().min(10, 'BOT_TOKEN is required'),
@@ -13,6 +20,7 @@ const schema = z.object({
     .min(1, 'ADMIN_TELEGRAM_ID is required')
     .refine((value) => /^\d+$/.test(value), 'ADMIN_TELEGRAM_ID must be a numeric Telegram id')
     .transform((value) => BigInt(value)),
+  ALLOWED_TELEGRAM_IDS: telegramIdList(),
 
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
@@ -23,7 +31,6 @@ const schema = z.object({
   WEBHOOK_SECRET: optionalString(),
 
   DEFAULT_TIMEZONE: z.string().default('Europe/Moscow'),
-  DEFAULT_LEARNING_LANGUAGE: z.string().default('pl'),
 
   CURRENCY_NAME: z.string().default('Солнышки'),
   CURRENCY_SYMBOL: z.string().default('☀️'),

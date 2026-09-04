@@ -16,6 +16,19 @@ import type { Exercise } from './exercise/exercise.types';
 import { srs } from './srs';
 
 const log = childLogger('learning');
+const LEARNING_LANGUAGE = 'pl';
+
+const GROUP_LABELS: Record<string, string> = {
+  greetings: 'Приветствия',
+  basics: 'Основы',
+  animals: 'Животные',
+  nature: 'Природа',
+  feelings: 'Чувства',
+  food: 'Еда',
+  objects: 'Предметы',
+  travel: 'Путешествия',
+  time: 'Время',
+};
 
 export interface AnswerOutcome {
   accepted: boolean;
@@ -37,75 +50,86 @@ export interface SessionSummary {
   alreadyCompleted: boolean;
 }
 
-async function pickSessionWords(user: User, now: Date, size: number): Promise<string[]> {
-  const dueUserWords = await prisma.userWord.findMany({
-    where: {
-      userId: user.id,
-      status: { not: WordStatus.MASTERED },
-      nextReviewAt: { lte: now },
-      word: { isActive: true, language: user.learningLanguage },
-    },
-    orderBy: [{ nextReviewAt: 'asc' }],
-    take: size,
-    select: { wordId: true },
-  });
-
-  const chosen = dueUserWords.map((entry) => entry.wordId);
-  const remaining = size - chosen.length;
-  if (remaining <= 0) return chosen;
-
-  const newWords = await prisma.word.findMany({
+async function pickSessionWords(size: number, groupId?: string): Promise<string[]> {
+  
+  const wordFilter = groupId ? { groups: { some: { groupId } } } : {};
+  const words = await prisma.word.findMany({
     where: {
       isActive: true,
-      language: user.learningLanguage,
-      userWords: { none: { userId: user.id } },
+      language: LEARNING_LANGUAGE,
+      ...wordFilter,
     },
-    orderBy: [{ difficulty: 'asc' }, { createdAt: 'asc' }],
-    take: Math.min(remaining, learningConfig.maxNewWordsPerSession),
     select: { id: true },
   });
-  chosen.push(...newWords.map((word) => word.id));
 
-  if (chosen.length >= size) return chosen.slice(0, size);
-
-  // Nothing due and no new words left: top up with the weakest known words.
-  const fillers = await prisma.userWord.findMany({
-    where: {
-      userId: user.id,
-      wordId: { notIn: chosen.length ? chosen : undefined },
-      word: { isActive: true, language: user.learningLanguage },
-    },
-    orderBy: [{ nextReviewAt: 'asc' }],
-    take: size - chosen.length,
-    select: { wordId: true },
-  });
-  chosen.push(...fillers.map((entry) => entry.wordId));
-
-  return chosen.slice(0, size);
+  return shuffle(words.map((word) => word.id)).slice(0, size);
 }
 
 export const learningService = {
+  async getGroups(user: User) {
+    const groups = await prisma.wordGroup.findMany({
+      where: { language: LEARNING_LANGUAGE },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true },
+    });
+    return groups.map((group) => ({ ...group, name: GROUP_LABELS[group.name] ?? group.name }));
+  },
+
+  async createGroup(name: string) {
+    return prisma.wordGroup.upsert({
+      where: { language_name: { language: LEARNING_LANGUAGE, name } },
+      create: { language: LEARNING_LANGUAGE, name },
+      update: {},
+      select: { id: true, name: true },
+    });
+  },
+
+  async addWordToGroup(groupId: string, original: string, translation: string) {
+    const word = await prisma.word.upsert({
+      where: { language_original_translation: { language: LEARNING_LANGUAGE, original, translation } },
+      create: {
+        language: LEARNING_LANGUAGE,
+        original,
+        translation,
+      },
+      update: {},
+    });
+    await prisma.wordGroupAssignment.upsert({
+      where: { wordId_groupId: { wordId: word.id, groupId } },
+      create: { wordId: word.id, groupId },
+      update: {},
+    });
+    return word;
+  },
+
   /** Words that are due right now plus how many brand new ones are available. */
-  async getSessionPreview(user: User, now = new Date()) {
-    const [due, newAvailable, activeSession] = await Promise.all([
+  async getSessionPreview(user: User, groupId?: string, now = new Date()) {
+    const wordFilter = groupId ? { groups: { some: { groupId } } } : {};
+    const sessionSize = groupId ? learningConfig.groupSessionSize : learningConfig.sessionSize;
+    const [due, newAvailable, availableWords, activeSession] = await Promise.all([
       prisma.userWord.count({
         where: {
           userId: user.id,
           status: { not: WordStatus.MASTERED },
           nextReviewAt: { lte: now },
-          word: { isActive: true, language: user.learningLanguage },
+          word: { isActive: true, language: LEARNING_LANGUAGE, ...wordFilter },
         },
       }),
       prisma.word.count({
-        where: { isActive: true, language: user.learningLanguage, userWords: { none: { userId: user.id } } },
+        where: {
+          isActive: true,
+          language: LEARNING_LANGUAGE,
+          userWords: { none: { userId: user.id } },
+          ...wordFilter,
+        },
+      }),
+      prisma.word.count({
+        where: { isActive: true, language: LEARNING_LANGUAGE, ...wordFilter },
       }),
       learningService.getActiveSession(user.id),
     ]);
 
-    const plannedSize = Math.min(
-      learningConfig.sessionSize,
-      due + Math.min(newAvailable, learningConfig.maxNewWordsPerSession),
-    );
+    const plannedSize = Math.min(sessionSize, availableWords);
 
     return {
       due,
@@ -124,16 +148,18 @@ export const learningService = {
   },
 
   /** Starts a session, or resumes the one already in progress. */
-  async startSession(user: User, now = new Date()): Promise<{ session: LearningSession; resumed: boolean } | null> {
+  async startSession(user: User, groupId?: string, now = new Date()): Promise<{ session: LearningSession; resumed: boolean } | null> {
     const active = await learningService.getActiveSession(user.id);
     if (active) return { session: active, resumed: true };
 
-    const wordIds = await pickSessionWords(user, now, learningConfig.sessionSize);
+    const sessionSize = groupId ? learningConfig.groupSessionSize : learningConfig.sessionSize;
+    const wordIds = await pickSessionWords(sessionSize, groupId);
     if (!wordIds.length) return null;
 
     const session = await prisma.learningSession.create({
       data: {
         userId: user.id,
+        groupId: groupId ?? null,
         plannedWordIds: wordIds,
         localDay: getDayKey(now, user.timezone),
       },
@@ -155,28 +181,13 @@ export const learningService = {
     const word = await prisma.word.findUnique({ where: { id: wordId } });
     if (!word) return null;
 
-    const [userWord, distractors] = await Promise.all([
-      prisma.userWord.findUnique({
-        where: { userId_wordId: { userId: session.userId, wordId } },
-        select: { learningLevel: true },
-      }),
-      prisma.word.findMany({
-        where: { isActive: true, language: word.language, id: { not: wordId }, category: word.category },
-        take: 24,
-      }),
-    ]);
-
-    const pool = distractors.length >= learningConfig.multipleChoiceDistractors
-      ? shuffle(distractors)
-      : shuffle(
-          await prisma.word.findMany({
-            where: { isActive: true, language: word.language, id: { not: wordId } },
-            take: 24,
-          }),
-        );
+    const userWord = await prisma.userWord.findUnique({
+      where: { userId_wordId: { userId: session.userId, wordId } },
+      select: { learningLevel: true },
+    });
 
     const type = selectExerciseType(userWord?.learningLevel ?? 0, session.cursor);
-    return buildExercise(type, word, pool, session.cursor, session.plannedWordIds.length);
+    return buildExercise(type, word, session.cursor, session.plannedWordIds.length);
   },
 
   /**
@@ -366,13 +377,15 @@ export const learningService = {
     });
 
     const durationSeconds = Math.max(0, Math.round((now.getTime() - session.startedAt.getTime()) / 1000));
+    const groupBonus = session.groupId ? 1 : 2;
+    const totalGemsEarned = groupBonus;
 
     await prisma.user.update({
       where: { id: user.id },
       data: {
         totalSessions: { increment: 1 },
         totalLearningSeconds: { increment: durationSeconds },
-        gems: { increment: session.gemsEarned },
+        gems: { increment: totalGemsEarned },
       },
     });
 
@@ -394,14 +407,14 @@ export const learningService = {
       },
     });
 
-    log.info({ userId: user.id, sessionId, gems: session.gemsEarned }, 'session completed');
+    log.info({ userId: user.id, sessionId, gems: totalGemsEarned }, 'session completed');
 
     return {
       sessionId,
       totalQuestions: session.totalQuestions,
       correctAnswers: session.correctAnswers,
       wrongAnswers: session.wrongAnswers,
-      gemsEarned: session.gemsEarned,
+      gemsEarned: totalGemsEarned,
       masteredWords,
       alreadyCompleted: false,
     };

@@ -31,10 +31,6 @@ export function formatDuration(totalSeconds: number): string {
   return `${minutes} мин`;
 }
 
-export function formatCurrency(amount: number): string {
-  return `${amount} ${CURRENCY}`;
-}
-
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
 export function weekdayLabel(index: number): string {

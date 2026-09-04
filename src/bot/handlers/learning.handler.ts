@@ -1,5 +1,5 @@
 import { AnswerGrade, ExerciseType } from '@prisma/client';
-import { Composer } from 'grammy';
+import { Composer, InlineKeyboard } from 'grammy';
 import { learningConfig } from '../../config/game.config';
 import type { Exercise } from '../../services/exercise/exercise.types';
 import { learningService } from '../../services/learning.service';
@@ -10,7 +10,6 @@ import { CURRENCY, escapeHtml, formatPercent, pluralRu, progressBar } from '../f
 import {
   continueKeyboard,
   exerciseKeyboard,
-  gradeKeyboard,
   sessionPreviewKeyboard,
   summaryKeyboard,
 } from '../keyboards/learning.keyboard';
@@ -29,36 +28,18 @@ function exerciseHeader(exercise: Exercise): string {
 }
 
 function renderExerciseText(exercise: Exercise): string {
-  const lines = [exerciseHeader(exercise), ''];
-
-  if (exercise.type === ExerciseType.REVERSE) {
-    lines.push(`Как будет «<b>${escapeHtml(exercise.prompt)}</b>»?`);
-  } else if (exercise.type === ExerciseType.MULTIPLE_CHOICE) {
-    lines.push(`<b>${escapeHtml(exercise.prompt)}</b>`, '', 'Что это значит?');
-  } else {
-    lines.push(`<b>${escapeHtml(exercise.prompt)}</b>`);
-    if (exercise.pronunciation) lines.push(`<i>[${escapeHtml(exercise.pronunciation)}]</i>`);
-  }
-
+  const lines = [exerciseHeader(exercise), '', `<b>${escapeHtml(exercise.prompt)}</b>`];
   return lines.join('\n');
 }
 
-function renderRevealedText(exercise: Exercise): string {
+function renderAnswerRevealText(exercise: Exercise): string {
   const lines = [
     exerciseHeader(exercise),
     '',
     `<b>${escapeHtml(exercise.prompt)}</b>`,
-    exercise.pronunciation ? `<i>[${escapeHtml(exercise.pronunciation)}]</i>` : '',
-    '',
     `➡️ ${escapeHtml(exercise.answer)}`,
   ];
 
-  if (exercise.example) {
-    lines.push('', `💬 ${escapeHtml(exercise.example)}`);
-    if (exercise.exampleTranslation) lines.push(`   <i>${escapeHtml(exercise.exampleTranslation)}</i>`);
-  }
-
-  lines.push('', 'Насколько было легко?');
   return lines.filter((line) => line !== '').join('\n');
 }
 
@@ -87,9 +68,7 @@ async function showSummary(ctx: BotContext, sessionId: string): Promise<void> {
     `+${summary.gemsEarned} ${CURRENCY}`,
     summary.masteredWords > 0 ? `🌟 Выучено полностью: ${summary.masteredWords}` : '',
     '',
-    streak.changed
-      ? `🔥 Streak: ${streak.currentStreak} ${pluralRu(streak.currentStreak, ['день', 'дня', 'дней'])}`
-      : `🔥 Streak: ${ctx.user.currentStreak} — уже отмечен сегодня`,
+    streak.changed ? `🔥 Streak: ${streak.currentStreak} ${pluralRu(streak.currentStreak, ['день', 'дня', 'дней'])}` : '',
   ];
 
   await render(ctx, lines.filter(Boolean).join('\n'), { keyboard: summaryKeyboard() });
@@ -103,60 +82,10 @@ async function advance(ctx: BotContext, sessionId: string, nextExercise: Exercis
   await showSummary(ctx, sessionId);
 }
 
-learningComposer.callbackQuery(cb(CB.learn, 'start'), async (ctx) => {
-  await ack(ctx);
-
-  const preview = await learningService.getSessionPreview(ctx.user);
-
-  if (preview.activeSession) {
-    const exercise = await learningService.getCurrentExercise(preview.activeSession.id);
-    if (exercise) {
-      await showExercise(ctx, preview.activeSession.id, exercise);
-      return;
-    }
-    await showSummary(ctx, preview.activeSession.id);
-    return;
-  }
-
-  if (preview.plannedSize === 0) {
-    await render(
-      ctx,
-      [
-        '🌙 <b>Всё повторено</b>',
-        '',
-        'Новых слов пока нет, а все карточки на сегодня уже сделаны.',
-        'Загляни завтра — streak сохранится.',
-      ].join('\n'),
-      { keyboard: sessionPreviewKeyboard(false) },
-    );
-    return;
-  }
-
-  const minutes = Math.max(1, Math.round(preview.estimatedSeconds / 60));
-
-  await render(
-    ctx,
-    [
-      '🌸 <b>Сегодняшняя тренировка</b>',
-      '',
-      `${preview.plannedSize} ${pluralRu(preview.plannedSize, ['карточка', 'карточки', 'карточек'])}`,
-      `≈ ${minutes} ${pluralRu(minutes, ['минута', 'минуты', 'минут'])}`,
-      '',
-      `🔁 К повторению: ${preview.due}`,
-      `✨ Новых слов: ${Math.min(preview.newAvailable, learningConfig.maxNewWordsPerSession)}`,
-      '',
-      'Награды: солнышки и streak.',
-    ].join('\n'),
-    { keyboard: sessionPreviewKeyboard(true) },
-  );
-});
-
-learningComposer.callbackQuery(cb(CB.learn, 'go'), async (ctx) => {
-  await ack(ctx);
-
-  const started = await learningService.startSession(ctx.user);
+async function startSelectedSession(ctx: BotContext): Promise<void> {
+  const started = await learningService.startSession(ctx.user, ctx.session.learningGroupId);
   if (!started) {
-    await render(ctx, '🌙 Пока нечего учить. Загляни позже.', { keyboard: sessionPreviewKeyboard(false) });
+    await render(ctx, '🌙 В выбранной группе пока нет карточек.', { keyboard: sessionPreviewKeyboard(false) });
     return;
   }
 
@@ -167,14 +96,97 @@ learningComposer.callbackQuery(cb(CB.learn, 'go'), async (ctx) => {
   }
 
   await showExercise(ctx, started.session.id, exercise);
+}
+
+learningComposer.callbackQuery(cb(CB.learn, 'start'), async (ctx) => {
+  await ack(ctx);
+
+  const preview = await learningService.getSessionPreview(ctx.user, ctx.session.learningGroupId);
+  if (preview.activeSession) {
+    const exercise = await learningService.getCurrentExercise(preview.activeSession.id);
+    if (exercise) {
+      await showExercise(ctx, preview.activeSession.id, exercise);
+      return;
+    }
+    await showSummary(ctx, preview.activeSession.id);
+    return;
+  }
+
+  const groups = await learningService.getGroups(ctx.user);
+  const keyboard = new InlineKeyboard()
+    .text('🎲 Все группы', cb(CB.learn, 'group', 'all'))
+    .row();
+  for (const group of groups) keyboard.text(group.name, cb(CB.learn, 'group', group.id)).row();
+  keyboard.text('⬅️ В меню', cb(CB.menu, 'main'));
+  await render(ctx, '📚 <b>Выбери группу слов</b>', { keyboard });
 });
 
-// Flashcard: reveal the translation, then ask for a self assessment.
-learningComposer.callbackQuery(/^learn:show:([^:]+):(\d+)$/, async (ctx) => {
+learningComposer.callbackQuery(cb(CB.learn, 'add'), async (ctx) => {
   await ack(ctx);
+  const groups = await learningService.getGroups(ctx.user);
+  const keyboard = new InlineKeyboard().text('➕ Новая группа', cb(CB.learn, 'newgroup')).row();
+  for (const group of groups) keyboard.text(group.name, cb(CB.learn, 'addgroup', group.id)).row();
+  keyboard.text('⬅️ В меню', cb(CB.menu, 'main'));
+  await render(ctx, '➕ <b>Добавить слово</b>\n\nВыбери группу:', { keyboard });
+});
+
+learningComposer.callbackQuery(cb(CB.learn, 'newgroup'), async (ctx) => {
+  await ack(ctx);
+  ctx.session.wordEntry = { step: 'groupName' };
+  await render(ctx, '➕ <b>Новая группа</b>\n\nНапиши название группы:', {
+    keyboard: new InlineKeyboard().text('✖️ Отмена', cb(CB.menu, 'main')),
+  });
+});
+
+learningComposer.callbackQuery(/^learn:addgroup:(.+)$/, async (ctx) => {
+  await ack(ctx);
+  const groupId = ctx.match[1];
+  if (!groupId) return;
+
+  const groups = await learningService.getGroups(ctx.user);
+  if (!groups.some((group) => group.id === groupId)) {
+    await ack(ctx, 'Группа не найдена', true);
+    return;
+  }
+
+  ctx.session.wordEntry = { step: 'original', groupId };
+  await render(ctx, '➕ <b>Добавить слово</b>\n\nНапиши польское слово:', {
+    keyboard: new InlineKeyboard().text('✖️ Отмена', cb(CB.menu, 'main')),
+  });
+});
+
+learningComposer.callbackQuery(/^learn:group:(.+)$/, async (ctx) => {
+  await ack(ctx);
+  const groupId = ctx.match[1];
+  if (!groupId) return;
+
+  if (groupId === 'all') {
+    ctx.session.learningGroupId = undefined;
+  } else {
+    const groups = await learningService.getGroups(ctx.user);
+    if (!groups.some((group) => group.id === groupId)) {
+      await ack(ctx, 'Группа не найдена', true);
+      return;
+    }
+    ctx.session.learningGroupId = groupId;
+  }
+
+  await startSelectedSession(ctx);
+});
+
+learningComposer.callbackQuery(cb(CB.learn, 'go'), async (ctx) => {
+  await ack(ctx);
+  await startSelectedSession(ctx);
+});
+
+// Flashcard: "don't know" submits AGAIN and reveals the translation before advancing.
+learningComposer.callbackQuery(/^learn:dontknow:([^:]+):(\d+)$/, async (ctx) => {
   const sessionId = ctx.match[1];
   const position = Number(ctx.match[2]);
-  if (!sessionId) return;
+  if (!sessionId) {
+    await ack(ctx);
+    return;
+  }
 
   const exercise = await learningService.getCurrentExercise(sessionId);
   if (!exercise || exercise.position !== position) {
@@ -182,7 +194,25 @@ learningComposer.callbackQuery(/^learn:show:([^:]+):(\d+)$/, async (ctx) => {
     return;
   }
 
-  await render(ctx, renderRevealedText(exercise), { keyboard: gradeKeyboard(sessionId, position) });
+  const responseTime = ctx.session.exerciseShownAt ? Date.now() - ctx.session.exerciseShownAt : undefined;
+
+  const outcome = await learningService.submitAnswer(
+    ctx.user,
+    sessionId,
+    position,
+    AnswerGrade.AGAIN,
+    ExerciseType.FLASHCARD,
+    responseTime,
+  );
+
+  if (!outcome.accepted) {
+    await ack(ctx, outcome.reason === 'stale_position' ? 'Уже отвечено' : 'Тренировка завершена');
+    if (outcome.reason === 'session_finished') await showSummary(ctx, sessionId);
+    return;
+  }
+
+  await ack(ctx);
+  await render(ctx, renderAnswerRevealText(exercise), { keyboard: continueKeyboard(sessionId) });
 });
 
 // Flashcard grading.
@@ -216,64 +246,6 @@ learningComposer.callbackQuery(/^learn:ans:([^:]+):(\d+):([A-Z]+)$/, async (ctx)
   await advance(ctx, sessionId, outcome.nextExercise);
 });
 
-// Multiple choice / reverse: the payload carries only the option index.
-learningComposer.callbackQuery(/^learn:pick:([^:]+):(\d+):(\d+)$/, async (ctx) => {
-  const sessionId = ctx.match[1];
-  const position = Number(ctx.match[2]);
-  const optionIndex = Number(ctx.match[3]);
-  if (!sessionId) {
-    await ack(ctx);
-    return;
-  }
-
-  const exercise = await learningService.getCurrentExercise(sessionId);
-  if (!exercise || exercise.position !== position) {
-    await ack(ctx, 'Уже отвечено');
-    return;
-  }
-
-  const option = exercise.options?.[optionIndex];
-  if (!option) {
-    await ack(ctx);
-    return;
-  }
-
-  const responseTime = ctx.session.exerciseShownAt ? Date.now() - ctx.session.exerciseShownAt : undefined;
-  const grade = option.isCorrect ? AnswerGrade.GOOD : AnswerGrade.AGAIN;
-
-  const outcome = await learningService.submitAnswer(
-    ctx.user,
-    sessionId,
-    position,
-    grade,
-    exercise.type,
-    responseTime,
-  );
-
-  if (!outcome.accepted) {
-    await ack(ctx, 'Уже отвечено');
-    return;
-  }
-
-  await ack(ctx, option.isCorrect ? '✅ Верно!' : '❌ Не совсем');
-
-  const feedback = [
-    option.isCorrect ? '✅ <b>Верно!</b>' : '❌ <b>Не совсем</b>',
-    '',
-    `<b>${escapeHtml(exercise.prompt)}</b> → ${escapeHtml(exercise.answer)}`,
-    exercise.example ? `\n💬 ${escapeHtml(exercise.example)}` : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
-
-  if (outcome.finished) {
-    await showSummary(ctx, sessionId);
-    return;
-  }
-
-  await render(ctx, feedback, { keyboard: continueKeyboard(sessionId) });
-});
-
 learningComposer.callbackQuery(/^learn:next:([^:]+)$/, async (ctx) => {
   await ack(ctx);
   const sessionId = ctx.match[1];
@@ -296,4 +268,49 @@ learningComposer.callbackQuery(/^learn:stop:([^:]+)$/, async (ctx) => {
 
   await learningService.abandonSession(ctx.user.id, sessionId);
   await renderMainMenu(ctx);
+});
+
+learningComposer.on('message:text', async (ctx, next) => {
+  const entry = ctx.session.wordEntry;
+  if (!entry) {
+    await next();
+    return;
+  }
+
+  const text = ctx.message.text.trim();
+  if (entry.step === 'groupName') {
+    if (!text || text.length > 100) {
+      await ctx.reply('Название группы должно содержать от 1 до 100 символов.');
+      return;
+    }
+    const group = await learningService.createGroup(text);
+    ctx.session.wordEntry = { step: 'original', groupId: group.id };
+    await ctx.reply('Напиши польское слово:', {
+      parse_mode: 'HTML',
+      reply_markup: new InlineKeyboard().text('✖️ Отмена', cb(CB.menu, 'main')),
+    });
+    return;
+  }
+
+  if (entry.step === 'original') {
+    if (!text || text.length > 200 || !entry.groupId) {
+      await ctx.reply('Польское слово должно содержать от 1 до 200 символов.');
+      return;
+    }
+    ctx.session.wordEntry = { step: 'translation', groupId: entry.groupId, original: text };
+    await ctx.reply('Теперь напиши русский перевод:');
+    return;
+  }
+
+  if (!text || text.length > 200 || !entry.groupId || !entry.original) {
+    await ctx.reply('Русский перевод должен содержать от 1 до 200 символов.');
+    return;
+  }
+
+  const word = await learningService.addWordToGroup(entry.groupId, entry.original, text);
+  ctx.session.wordEntry = undefined;
+  await ctx.reply(`✅ Добавлено: <b>${escapeHtml(word.original)}</b> — ${escapeHtml(word.translation)}`, {
+    parse_mode: 'HTML',
+    reply_markup: new InlineKeyboard().text('➕ Добавить ещё', cb(CB.learn, 'add')).row().text('⬅️ В меню', cb(CB.menu, 'main')),
+  });
 });

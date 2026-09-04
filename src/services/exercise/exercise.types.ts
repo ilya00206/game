@@ -1,11 +1,5 @@
 import type { ExerciseType, Word } from '@prisma/client';
 
-export interface ExerciseOption {
-  id: string;
-  label: string;
-  isCorrect: boolean;
-}
-
 export interface Exercise {
   type: ExerciseType;
   wordId: string;
@@ -18,7 +12,6 @@ export interface Exercise {
   exampleTranslation?: string | undefined;
   pronunciation?: string | undefined;
   audioFileId?: string | undefined;
-  options?: ExerciseOption[] | undefined;
   /** Position inside the session queue; used for idempotent answering. */
   position: number;
   total: number;
@@ -26,8 +19,6 @@ export interface Exercise {
 
 export interface ExerciseBuilderContext {
   word: Word;
-  /** Pool of other words used to build distractors. */
-  distractorPool: Word[];
   position: number;
   total: number;
 }

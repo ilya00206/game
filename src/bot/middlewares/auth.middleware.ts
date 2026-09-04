@@ -11,8 +11,14 @@ export async function authMiddleware(ctx: BotContext, next: NextFunction): Promi
   const from = ctx.from;
   if (!from || from.is_bot) return;
 
+  const telegramId = BigInt(from.id);
+  if (env.ALLOWED_TELEGRAM_IDS.length > 0 && !env.ALLOWED_TELEGRAM_IDS.includes(telegramId)) {
+    log.info({ telegramId: from.id }, 'user is not in the allowlist');
+    return;
+  }
+
   const { user } = await userService.ensureUser({
-    telegramId: BigInt(from.id),
+    telegramId,
     username: from.username,
     firstName: from.first_name,
     lastName: from.last_name,

@@ -23,12 +23,6 @@ enum WordStatus {
   MASTERED
 }
 
-enum Difficulty {
-  EASY
-  MEDIUM
-  HARD
-}
-
 enum ExerciseType {
   FLASHCARD
   MULTIPLE_CHOICE
@@ -128,8 +122,6 @@ model Word {
   exampleTranslation String?
   audioFileId        String?
   imageFileId        String?
-  difficulty         Difficulty @default(MEDIUM)
-  category           String?
   tags               String[]   @default([])
   isActive           Boolean    @default(true)
 
@@ -138,10 +130,33 @@ model Word {
 
   userWords UserWord[]
   answers   LearningAnswer[]
+  groups    WordGroupAssignment[]
 
   @@unique([language, original, translation])
   @@index([language, isActive])
-  @@index([category])
+}
+
+model WordGroup {
+  id        String   @id @default(cuid())
+  language  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  words WordGroupAssignment[]
+
+  @@unique([language, name])
+  @@index([language])
+}
+
+model WordGroupAssignment {
+  wordId  String
+  groupId String
+  word    Word      @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  group   WordGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([wordId, groupId])
+  @@index([groupId])
 }
 
 model UserWord {
@@ -182,6 +197,7 @@ model LearningSession {
   id     String @id @default(cuid())
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupId String?
 
   status SessionStatus @default(IN_PROGRESS)
 
@@ -202,6 +218,7 @@ model LearningSession {
   answers LearningAnswer[]
 
   @@index([userId, status])
+  @@index([groupId])
   @@index([userId, localDay])
 }
 

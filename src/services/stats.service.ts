@@ -51,13 +51,14 @@ export const statsService = {
   },
 
   async getAdminOverview() {
-    const [users, activeToday, words, sessions, answers, gems] = await Promise.all([
+    const [users, activeToday, words, sessions, answers, gems, maxStreak] = await Promise.all([
       prisma.user.count(),
       prisma.user.count({ where: { lastActiveAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } } }),
       prisma.word.count({ where: { isActive: true } }),
       prisma.learningSession.count({ where: { status: SessionStatus.COMPLETED } }),
       prisma.learningAnswer.count(),
       prisma.user.aggregate({ _sum: { gems: true } }),
+      prisma.user.aggregate({ _max: { longestStreak: true } }),
     ]);
 
     return {
@@ -67,6 +68,7 @@ export const statsService = {
       sessions,
       answers,
       gems: gems._sum.gems ?? 0,
+      maxStreak: maxStreak._max.longestStreak ?? 0,
     };
   },
 };

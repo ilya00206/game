@@ -14,14 +14,14 @@ import type { AnswerGrade, WordStatus } from '@prisma/client';
 export const learningConfig = {
   /** How many cards a standard daily session contains. */
   sessionSize: 10,
+  /** Group sessions are short and award a completion bonus. */
+  groupSessionSize: 10,
   /** Upper bound of brand new words inside one session. */
   maxNewWordsPerSession: 4,
   /** Minimum answered cards that make a session count as daily activity. */
   minAnswersForDailyActivity: 5,
-  /** Distractor count for multiple choice exercises (excluding the answer). */
-  multipleChoiceDistractors: 3,
   /** Exercise types enabled in the MVP, in rotation order. */
-  enabledExerciseTypes: ['FLASHCARD', 'MULTIPLE_CHOICE', 'REVERSE'] as const,
+  enabledExerciseTypes: ['FLASHCARD'] as const,
   /** A word must reach this many successful repetitions to become MASTERED. */
   masteryRepetitions: 6,
   /** Interval (days) at which a word is considered mastered. */
@@ -65,9 +65,9 @@ export const srsConfig = {
 
 export const gradeConfig: Record<AnswerGrade, { isCorrect: boolean; gems: number; label: string }> = {
   AGAIN: { isCorrect: false, gems: 0, label: '😵 Не знаю' },
-  HARD: { isCorrect: true, gems: 1, label: '🤔 Сложно' },
-  GOOD: { isCorrect: true, gems: 1, label: '🙂 Знаю' },
-  EASY: { isCorrect: true, gems: 1, label: '😍 Легко' },
+  HARD: { isCorrect: true, gems: 0, label: '🤔 Сложно' },
+  GOOD: { isCorrect: true, gems: 0, label: '🙂 Знаю' },
+  EASY: { isCorrect: true, gems: 0, label: '😍 Легко' },
 };
 
 // ---------------------------------------------------------------------------

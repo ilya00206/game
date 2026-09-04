@@ -9,7 +9,7 @@ import { ack, render } from '../render';
 
 export const settingsComposer = new Composer<BotContext>();
 
-const TIMEZONE_PRESETS = ['Europe/Kaliningrad', 'Europe/Moscow', 'Europe/Kyiv', 'Europe/Warsaw', 'Asia/Almaty'];
+const TIMEZONE_PRESETS = ['Europe/Warsaw', 'Europe/Minsk'];
 
 async function renderSettings(ctx: BotContext): Promise<void> {
   const settings = await userService.getNotificationSettings(ctx.user.id);
