@@ -7,7 +7,6 @@ export function mainMenuKeyboard(isAdmin: boolean): InlineKeyboard {
     .row()
     .text('➕ Добавить слово', cb(CB.learn, 'add'))
     .row()
-    .text(' Профиль', cb(CB.profile, 'open'))
     .text('⚙️ Настройки', cb(CB.settings, 'open'));
 
   if (isAdmin) {
