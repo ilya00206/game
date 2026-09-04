@@ -1,0 +1,621 @@
+// Prisma schema for the Telegram language learning game.
+// Design rules enforced here:
+//  - every balance change is backed by an EconomyTransaction row (ledger)
+//  - every rewarding operation carries a unique idempotencyKey
+//  - per-user/per-period uniqueness protects daily bonus, quests and achievements
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum WordStatus {
+  NEW
+  LEARNING
+  FAMILIAR
+  KNOWN
+  MASTERED
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum ExerciseType {
+  FLASHCARD
+  MULTIPLE_CHOICE
+  TRANSLATION
+  REVERSE
+}
+
+enum AnswerGrade {
+  AGAIN
+  HARD
+  GOOD
+  EASY
+}
+
+enum SessionStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+enum TransactionDirection {
+  CREDIT
+  DEBIT
+}
+
+enum QuestPeriod {
+  DAILY
+  WEEKLY
+  LONG_TERM
+}
+
+enum QuestMetric {
+  WORDS_ANSWERED
+  CORRECT_ANSWERS
+  WORDS_MASTERED
+  SESSIONS_COMPLETED
+  XP_EARNED
+  ACTIVE_DAYS
+  DAILY_BONUS_CLAIMED
+}
+
+enum UserQuestStatus {
+  ACTIVE
+  COMPLETED
+  CLAIMED
+  EXPIRED
+}
+
+enum ShopItemType {
+  STREAK_SHIELD
+  XP_BOOST
+  COSMETIC
+  SPECIAL_REWARD
+  PERSONAL_REWARD
+}
+
+enum RewardContentType {
+  TEXT
+  PHOTO
+  VIDEO
+  ANIMATION
+  DOCUMENT
+  AUDIO
+  VOICE
+  STICKER
+}
+
+enum GameEventType {
+  USER_REGISTERED
+  WORD_ANSWERED
+  WORD_MASTERED
+  SESSION_STARTED
+  SESSION_COMPLETED
+  DAILY_ACTIVITY_COMPLETED
+  STREAK_UPDATED
+  STREAK_MILESTONE_REACHED
+  LEVEL_UP
+  QUEST_PROGRESS
+  QUEST_COMPLETED
+  QUEST_CLAIMED
+  ACHIEVEMENT_UNLOCKED
+  DAILY_BONUS_CLAIMED
+  SHOP_PURCHASE
+  REWARD_GRANTED
+  EASTER_EGG_FOUND
+}
+
+// ---------------------------------------------------------------------------
+// User
+// ---------------------------------------------------------------------------
+
+model User {
+  id         String  @id @default(cuid())
+  telegramId BigInt  @unique
+  username   String?
+  firstName  String?
+  lastName   String?
+
+  // interface language of the bot
+  language String @default("ru")
+  // language the user is learning
+  learningLanguage String @default("fr")
+  timezone         String @default("Europe/Moscow")
+
+  isAdmin  Boolean @default(false)
+  isBanned Boolean @default(false)
+
+  // --- progression ---
+  xp    Int @default(0)
+  level Int @default(1)
+
+  // --- economy (denormalised, always mirrored by the ledger) ---
+  balance       Int @default(0)
+  streakShields Int @default(0)
+
+  // --- streak ---
+  currentStreak    Int       @default(0)
+  longestStreak    Int       @default(0)
+  lastActivityDay  String? // local day key YYYY-MM-DD
+  lastActivityAt   DateTime?
+  streakFrozenDays Int       @default(0)
+
+  // --- daily bonus ---
+  dailyBonusStreak    Int       @default(0)
+  dailyBonusDay       String? // local day key YYYY-MM-DD
+  dailyBonusClaimedAt DateTime?
+
+  // --- lifetime counters (cheap stats, always derivable from the ledger) ---
+  totalAnswers         Int @default(0)
+  totalCorrectAnswers  Int @default(0)
+  totalSessions        Int @default(0)
+  totalLearningSeconds Int @default(0)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lastActiveAt DateTime @default(now())
+
+  notificationSettings NotificationSettings?
+  words                UserWord[]
+  sessions             LearningSession[]
+  answers              LearningAnswer[]
+  transactions         EconomyTransaction[]
+  purchases            Purchase[]
+  inventory            InventoryItem[]
+  quests               UserQuest[]
+  achievements         UserAchievement[]
+  rewardPurchases      RewardPurchase[]
+  dailyBonusClaims     DailyBonusClaim[]
+  events               GameEventLog[]
+  easterEggs           UserEasterEgg[]
+  dailyActivity        DailyActivity[]
+
+  @@index([lastActiveAt])
+}
+
+model NotificationSettings {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  notificationsEnabled  Boolean @default(true)
+  dailyReminderEnabled  Boolean @default(true)
+  streakReminderEnabled Boolean @default(true)
+  questReminderEnabled  Boolean @default(true)
+  // local time HH:mm in the user's timezone
+  reminderTime          String  @default("19:00")
+
+  lastDailyReminderDay  String?
+  lastStreakReminderDay String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Content
+// ---------------------------------------------------------------------------
+
+model Word {
+  id                 String     @id @default(cuid())
+  language           String
+  original           String
+  translation        String
+  pronunciation      String?
+  exampleSentence    String?
+  exampleTranslation String?
+  audioFileId        String?
+  imageFileId        String?
+  difficulty         Difficulty @default(MEDIUM)
+  category           String?
+  tags               String[]   @default([])
+  isActive           Boolean    @default(true)
+  // personal note the admin can attach to a word (used by the easter-egg layer)
+  note               String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userWords UserWord[]
+  answers   LearningAnswer[]
+
+  @@unique([language, original, translation])
+  @@index([language, isActive])
+  @@index([category])
+}
+
+model UserWord {
+  id     String @id @default(cuid())
+  userId String
+  wordId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  word   Word   @relation(fields: [wordId], references: [id], onDelete: Cascade)
+
+  status        WordStatus @default(NEW)
+  learningLevel Int        @default(0)
+
+  correctAnswers Int @default(0)
+  wrongAnswers   Int @default(0)
+
+  consecutiveCorrect Int @default(0)
+  consecutiveWrong   Int @default(0)
+
+  // SRS state (SM-2 compatible so the algorithm can be swapped later)
+  easeFactor Float @default(2.5)
+  interval   Int   @default(0) // days
+  repetition Int   @default(0)
+  lapses     Int   @default(0)
+
+  lastReviewedAt DateTime?
+  nextReviewAt   DateTime?
+  masteredAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, wordId])
+  @@index([userId, nextReviewAt])
+  @@index([userId, status])
+}
+
+model LearningSession {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  status SessionStatus @default(IN_PROGRESS)
+
+  // ordered list of word ids planned for this session
+  plannedWordIds String[] @default([])
+  cursor         Int      @default(0)
+
+  totalQuestions Int @default(0)
+  correctAnswers Int @default(0)
+  wrongAnswers   Int @default(0)
+
+  xpEarned       Int @default(0)
+  currencyEarned Int @default(0)
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  localDay    String // local day key at session start
+
+  answers LearningAnswer[]
+
+  @@index([userId, status])
+  @@index([userId, localDay])
+}
+
+model LearningAnswer {
+  id        String          @id @default(cuid())
+  sessionId String
+  session   LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wordId    String
+  word      Word            @relation(fields: [wordId], references: [id], onDelete: Cascade)
+
+  exerciseType   ExerciseType
+  grade          AnswerGrade
+  isCorrect      Boolean
+  responseTimeMs Int?
+  // position inside the session queue: guarantees one answer per question
+  position       Int
+
+  createdAt DateTime @default(now())
+
+  @@unique([sessionId, position])
+  @@index([userId, createdAt])
+}
+
+model DailyActivity {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  localDay String
+
+  answers   Int @default(0)
+  correct   Int @default(0)
+  sessions  Int @default(0)
+  xpEarned  Int @default(0)
+  seconds   Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, localDay])
+  @@index([userId, localDay])
+}
+
+// ---------------------------------------------------------------------------
+// Economy
+// ---------------------------------------------------------------------------
+
+model EconomyTransaction {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  direction      TransactionDirection
+  amount         Int // always positive, direction carries the sign
+  balanceAfter   Int
+  reason         String // e.g. daily_bonus, lesson_completed, shop_purchase
+  metadata       Json?
+  // set for every operation that must never be applied twice
+  idempotencyKey String?              @unique
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([reason])
+}
+
+model ShopItem {
+  id          String       @id @default(cuid())
+  code        String       @unique
+  title       String
+  description String
+  icon        String       @default("🛍")
+  price       Int
+  type        ShopItemType
+  // type specific payload, e.g. { "amount": 1 } or { "rewardId": "..." }
+  metadata    Json?
+  // null = unlimited, otherwise how many times a single user may buy it
+  perUserLimit Int?
+  stock        Int?
+  sortOrder    Int         @default(0)
+  isActive     Boolean     @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchases Purchase[]
+
+  @@index([isActive, sortOrder])
+}
+
+model Purchase {
+  id     String   @id @default(cuid())
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId String
+  item   ShopItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  price          Int
+  quantity       Int     @default(1)
+  idempotencyKey String  @unique
+  transactionId  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model InventoryItem {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  code     String
+  quantity Int    @default(0)
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, code])
+}
+
+// ---------------------------------------------------------------------------
+// Quests
+// ---------------------------------------------------------------------------
+
+model Quest {
+  id          String      @id @default(cuid())
+  code        String      @unique
+  title       String
+  description String
+  icon        String      @default("🎯")
+  period      QuestPeriod
+  metric      QuestMetric
+  target      Int
+  // reward bundle: { "currency": 50, "xp": 20, "streakShields": 0 }
+  reward      Json
+  weight      Int         @default(1)
+  isActive    Boolean     @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userQuests UserQuest[]
+
+  @@index([isActive, period])
+}
+
+model UserQuest {
+  id      String @id @default(cuid())
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questId String
+  quest   Quest  @relation(fields: [questId], references: [id], onDelete: Cascade)
+
+  // local day key for daily quests, ISO week key (YYYY-Www) for weekly
+  periodKey String
+  progress  Int             @default(0)
+  target    Int
+  status    UserQuestStatus @default(ACTIVE)
+
+  completedAt DateTime?
+  claimedAt   DateTime?
+  expiresAt   DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, questId, periodKey])
+  @@index([userId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Achievements
+// ---------------------------------------------------------------------------
+
+model Achievement {
+  id          String @id @default(cuid())
+  code        String @unique
+  title       String
+  description String
+  icon        String @default("🏅")
+  // { "metric": "TOTAL_CORRECT_ANSWERS", "threshold": 100 }
+  condition   Json
+  reward      Json?
+  isSecret    Boolean @default(false)
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userAchievements UserAchievement[]
+
+  @@index([isActive, sortOrder])
+}
+
+model UserAchievement {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementId String
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  unlockedAt DateTime @default(now())
+
+  @@unique([userId, achievementId])
+}
+
+// ---------------------------------------------------------------------------
+// Rewards (admin authored content)
+// ---------------------------------------------------------------------------
+
+model Reward {
+  id          String            @id @default(cuid())
+  code        String            @unique
+  title       String
+  description String
+  icon        String            @default("🎁")
+  price       Int               @default(0)
+  contentType RewardContentType @default(TEXT)
+  contentText String?
+  // Telegram file_id for media rewards
+  contentFileId String?
+  metadata      Json?
+  isActive      Boolean         @default(true)
+  perUserLimit  Int?            @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchases RewardPurchase[]
+
+  @@index([isActive])
+}
+
+model RewardPurchase {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rewardId String
+  reward   Reward @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+
+  price          Int
+  idempotencyKey String    @unique
+  openedAt       DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Daily bonus
+// ---------------------------------------------------------------------------
+
+model DailyBonusClaim {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  localDay  String
+  dayInCycle Int
+  reward    Json
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, localDay])
+}
+
+// ---------------------------------------------------------------------------
+// Easter eggs (personal layer)
+// ---------------------------------------------------------------------------
+
+model EasterEgg {
+  id          String            @id @default(cuid())
+  code        String            @unique
+  title       String
+  // free-form trigger descriptor, e.g. { "kind": "command", "value": "/love" }
+  trigger     Json
+  contentType RewardContentType @default(TEXT)
+  contentText String?
+  contentFileId String?
+  reward      Json?
+  isActive    Boolean           @default(true)
+  isRepeatable Boolean          @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  finds UserEasterEgg[]
+}
+
+model UserEasterEgg {
+  id     String    @id @default(cuid())
+  userId String
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eggId  String
+  egg    EasterEgg @relation(fields: [eggId], references: [id], onDelete: Cascade)
+
+  foundAt DateTime @default(now())
+  times   Int      @default(1)
+
+  @@unique([userId, eggId])
+}
+
+// ---------------------------------------------------------------------------
+// Event log
+// ---------------------------------------------------------------------------
+
+model GameEventLog {
+  id      String        @id @default(cuid())
+  userId  String?
+  user    User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type    GameEventType
+  payload Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+}

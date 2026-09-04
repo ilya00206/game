@@ -1,0 +1,23 @@
+node_modules/
+dist/
+coverage/
+
+.env
+.env.*
+!.env.example
+
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+prisma/*.db
+prisma/*.db-journal
+
+# removed test tooling (delete these leftovers locally)
+tests/
+vitest.config.ts
