@@ -9,13 +9,13 @@ export function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-export function progressBar(ratio: number, length = uiConfig.progressBarLength): string {
+export function progressBar(ratio: number, length: number = uiConfig.progressBarLength): string {
   const clamped = Math.min(1, Math.max(0, ratio));
   const filled = Math.round(clamped * length);
   return uiConfig.progressBarFilled.repeat(filled) + uiConfig.progressBarEmpty.repeat(length - filled);
 }
 
-export function barForValue(value: number, max: number, maxLength = uiConfig.weeklyBarMaxLength): string {
+export function barForValue(value: number, max: number, maxLength: number = uiConfig.weeklyBarMaxLength): string {
   if (max <= 0 || value <= 0) return '·';
   const length = Math.max(1, Math.round((value / max) * maxLength));
   return uiConfig.progressBarFilled.repeat(length);
