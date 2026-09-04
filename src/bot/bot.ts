@@ -63,6 +63,5 @@ export function createBot(): Bot<BotContext> {
 export const BOT_COMMANDS = [
   { command: 'start', description: 'Начать игру' },
   { command: 'menu', description: 'Главное меню' },
-  { command: 'stats', description: 'Мой прогресс' },
   { command: 'help', description: 'Как играть' },
 ];

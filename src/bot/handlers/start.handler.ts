@@ -17,7 +17,7 @@ startComposer.command('help', async (ctx) => {
       '🔥 <b>Streak</b> — заходи каждый день, чтобы не терять серию.',
       '☀️ <b>Солнышки</b> — получай по одному за каждый правильный ответ.',
       '',
-      'Команды: /start /menu /help /stats',
+      'Команды: /start /menu /help',
     ].join('\n'),
     { parse_mode: 'HTML' },
   );

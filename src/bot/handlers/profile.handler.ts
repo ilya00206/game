@@ -64,7 +64,3 @@ profileComposer.callbackQuery(cb(CB.progress, 'open'), async (ctx) => {
   await ack(ctx);
   await renderProgress(ctx);
 });
-
-profileComposer.command('stats', async (ctx) => {
-  await renderProgress(ctx);
-});
